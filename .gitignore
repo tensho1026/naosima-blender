@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.blend1
+.DS_Store
+.python-version
+output/*.blend
+output/previews/**
+!output/previews/.gitkeep
+assets/landmarks/*.blend
