@@ -1,0 +1,3 @@
+# The generator runs inside Blender's bundled Python (tested: Blender 4.5 LTS).
+# Host Python is only needed for optional pre-fetch outside Blender.
+# No third-party packages are required: urllib, json, and numpy (bundled in Blender) are used.
