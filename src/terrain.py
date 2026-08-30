@@ -89,6 +89,23 @@ def build_terrain(cfg: LocationConfig, dem: DEMGrid, crs: CRS, osm: OsmData, mat
             vert_index[j, i] = len(verts)
             verts.append((x, y, z))
 
+    # Pull shoreline verts toward sea level so DEM nodata does not create 10–20 m cliffs.
+    ny, nx = grid.ny, grid.nx
+    for j in range(ny):
+        for i in range(nx):
+            vi = int(vert_index[j, i])
+            if vi < 0:
+                continue
+            edge = False
+            for dj, di in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                jj, ii = j + dj, i + di
+                if jj < 0 or ii < 0 or jj >= ny or ii >= nx or int(vert_index[jj, ii]) < 0:
+                    edge = True
+                    break
+            if edge:
+                x, y, z = verts[vi]
+                verts[vi] = (x, y, min(z, sea + 0.6))
+
     faces: List[Tuple[int, int, int, int]] = []
     face_mat: List[int] = []
     polys = _landuse_polygons(osm, crs)
@@ -111,8 +128,7 @@ def build_terrain(cfg: LocationConfig, dem: DEMGrid, crs: CRS, osm: OsmData, mat
     col = collection("Terrain")
     obj = new_mesh_object("Terrain", verts, faces, col)
     # Multi-material
-    slot_names = ["Grass", "Forest", "TraditionalWall", "Sand", "Rock", "Terrain"]
-    # residential uses a dirt/packed earth tone via TraditionalWall as stand-in ground
+    slot_names = ["Grass", "Forest", "ResidentialGround", "Sand", "Rock", "Terrain"]
     obj.data.materials.clear()
     for name in slot_names:
         mat = mats.get(name) or mats["Terrain"]

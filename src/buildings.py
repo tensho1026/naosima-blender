@@ -123,8 +123,6 @@ def build_buildings(
         zs = [sampler.height_at_xy(x, y) for x, y in ring[:: max(1, len(ring) // 8)] or ring]
         z0 = max(zs) if zs else sampler.height_at_xy(cx, cy)
         height, is_est = estimated_height(way.tags)
-        if is_est:
-            estimated += 1
         c = way_centroid(way)
         key = classify_latlon(cfg, crs, c[0], c[1]) if c else "other"
         style = district_style(cfg, key)
@@ -136,6 +134,8 @@ def build_buildings(
         verts, faces = _extrude_mesh(ring, z0, height, gable=gable)
         if not verts:
             continue
+        if is_est:
+            estimated += 1
         obj = new_mesh_object(f"bldg_{way.id}", verts, faces, col)
         if style == "traditional":
             assign_material(obj, mats["TraditionalWall"])

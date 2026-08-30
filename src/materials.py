@@ -69,17 +69,21 @@ def make_materials() -> Dict[str, bpy.types.Material]:
     _noise_bump(nt, bsdf, scale=30.0, strength=0.04)
 
     nt, bsdf = new("TraditionalWall")
-    # Honmura: yakisugi / plaster — dark brown-gray + off-white mix represented as warm gray
-    _set_color(bsdf, (0.45, 0.40, 0.34), roughness=0.78)
+    # Honmura yakisugi / plaster: dark charred cedar brown (literature: 焼杉)
+    _set_color(bsdf, (0.22, 0.16, 0.12), roughness=0.82)
 
     nt, bsdf = new("ModernWall")
-    _set_color(bsdf, (0.78, 0.77, 0.74), roughness=0.55)
+    _set_color(bsdf, (0.72, 0.71, 0.68), roughness=0.55)
 
     nt, bsdf = new("Roof")
-    _set_color(bsdf, (0.28, 0.18, 0.14), roughness=0.7)  # kawara-like
+    _set_color(bsdf, (0.22, 0.10, 0.08), roughness=0.68)  # kawara-like
 
     nt, bsdf = new("RoofModern")
-    _set_color(bsdf, (0.22, 0.23, 0.25), roughness=0.45)
+    _set_color(bsdf, (0.18, 0.19, 0.21), roughness=0.45)
+
+    nt, bsdf = new("ResidentialGround")
+    _set_color(bsdf, (0.38, 0.34, 0.28), roughness=0.9)
+    _noise_bump(nt, bsdf, scale=20.0, strength=0.06)
 
     nt, bsdf = new("Sand")
     _set_color(bsdf, (0.62, 0.55, 0.40), roughness=0.88)

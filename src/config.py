@@ -144,7 +144,7 @@ NAOSHIMA_DISTRICTS = {
         # Honmura Port: 34.461671, 133.998005
         lat=34.461671,
         lon=133.998005,
-        radius_m=420.0,
+        radius_m=520.0,
         style="traditional",
         note="Port coordinates from public gazetteer. Village extent radius is APPROXIMATE.",
         osm_name_hints=("本村", "Honmura", "本村港"),

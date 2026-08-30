@@ -3,12 +3,6 @@ __pycache__/
 *.blend1
 .DS_Store
 .python-version
-data/dem/**
-!data/dem/.gitkeep
-data/osm/**
-!data/osm/.gitkeep
-data/cache/**
-!data/cache/.gitkeep
 output/*.blend
 output/previews/**
 !output/previews/.gitkeep
