@@ -48,6 +48,9 @@ def generate(cfg: LocationConfig, do_render: bool = False, blend_name: str = "na
     build_ocean(cfg, crs, mats)
     build_coastline(cfg, dem, crs, osm, mats)
     build_buildings(cfg, osm, crs, sampler, mats)
+    if cfg.aerial and cfg.location_id=='naoshima':
+        from .aerial import apply_miyanoura_roof_imagery
+        apply_miyanoura_roof_imagery(crs)
     if cfg.aerial:
         from .individual_buildings import build_individual_buildings
         build_individual_buildings(cfg,osm,crs,sampler)

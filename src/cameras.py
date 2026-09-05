@@ -98,3 +98,16 @@ def refine_review_cameras(cfg,crs):
         target=house.matrix_world@Vector((6,-3,2.8))
         cam.location=house.matrix_world@Vector((-12,16,10))
         cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=45;cam.data.clip_end=20000
+
+    store=bpy.data.objects.get('Individual_SevenEleven_1307364185')
+    if store:
+        bpy.context.view_layer.update()
+        cam=bpy.data.objects.new('Camera_SevenEleven',bpy.data.cameras.new('Camera_SevenEleven'));link_object(cam,collection('Cameras'))
+        cam.location=store.matrix_world@Vector((26,19,8));target=store.matrix_world@Vector((7,-1,1.5))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=45;cam.data.clip_end=20000
+
+    pumpkin=bpy.data.objects.get('RedPumpkin_Exterior')
+    if pumpkin:
+        cam=bpy.data.objects.new('Camera_RedPumpkin',bpy.data.cameras.new('Camera_RedPumpkin'));link_object(cam,collection('Cameras'))
+        cam.location=Vector(pumpkin.location)+Vector((10,-13,5.5));target=Vector(pumpkin.location)+Vector((0,0,1.8))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=48;cam.data.clip_end=20000

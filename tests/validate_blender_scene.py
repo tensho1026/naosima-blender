@@ -9,11 +9,13 @@ from src.aerial import tile_xy
 bpy.ops.wm.open_mainfile(filepath=str(ROOT/'output/naoshima_refined.blend'))
 scene=bpy.context.scene
 buildings=[o for o in bpy.data.objects if o.name.startswith('bldg_')]
-assert len(buildings)==1545,len(buildings)
+assert len(buildings)==1544,len(buildings)
 assert 'bldg_1361954806' not in bpy.data.objects,'Duplicate Art Island Center envelope'
 assert 'Individual_ArtIslandCenter_1361954806' in bpy.data.objects
 assert 'bldg_1361901029' not in bpy.data.objects,'Duplicate NaoPAM envelope'
 assert 'Individual_NaoPAM_1361901029' in bpy.data.objects
+assert 'Individual_SevenEleven_1307364185' in bpy.data.objects
+assert 'bldg_1307364185' not in bpy.data.objects
 ferry=bpy.data.objects['Ferry_Naoshima_2015']
 # At the berth the hull must stay over water; do not infer this from its origin.
 from mathutils import Vector
@@ -41,6 +43,40 @@ terrain=bpy.data.objects['Terrain']
 assert len(terrain.data.vertices)>190000
 assert len(terrain.data.materials)==3
 crs=CRS(naoshima_config())
+from src.vegetation import _forest_regions
+from src.osm import load_or_fetch_osm
+from src.coordinates import point_in_ring
+forest=bpy.data.objects['ForestPoints']
+assert forest.modifiers.get('ForestGN') and forest.modifiers['ForestGN'].node_group
+regions=_forest_regions(load_or_fetch_osm(naoshima_config()),crs)
+assert {'OSM relation/10643315','OSM relation/18742522','OSM relation/18870504'} <= {s for _,_,s in regions}
+for outer,holes,source in regions:
+    for hole in holes:
+        xmin=min(p[0] for p in hole);xmax=max(p[0] for p in hole)
+        ymin=min(p[1] for p in hole);ymax=max(p[1] for p in hole)
+        for v in forest.data.vertices:
+            x,y=v.co.x,v.co.y
+            if xmin<x<xmax and ymin<y<ymax:
+                assert not point_in_ring(x,y,hole),('Tree placed in forest clearing',source,x,y)
+roof_meta=json.loads((ROOT/'data/aerial/miyanoura_detail/metadata.json').read_text())
+roof_count=0
+for obj in buildings:
+    if 'roof_appearance_source' not in obj:continue
+    roof_count+=1
+    layer=obj.data.uv_layers['GSI_Roof_WebMercator']
+    for poly in obj.data.polygons:
+        if obj.data.materials[poly.material_index].name!='GSI_Miyanoura_Observed_Roofs':continue
+        assert poly.normal.z>.15,('Aerial photograph painted onto wall',obj.name,poly.index)
+        for li in poly.loop_indices:
+            u,v=layer.data[li].uv
+            tx=roof_meta['x0']+u*(roof_meta['x1']-roof_meta['x0']+1)
+            ty=roof_meta['y0']+(1-v)*(roof_meta['y1']-roof_meta['y0']+1)
+            n=2**roof_meta['zoom']
+            lon=tx/n*360-180;lat=math.degrees(math.atan(math.sinh(math.pi*(1-2*ty/n))))
+            x,y=crs.to_xy(lat,lon)
+            actual=obj.matrix_world@obj.data.vertices[obj.data.loops[li].vertex_index].co
+            assert math.hypot(actual.x-x,actual.y-y)<.01,('Roof image misregistered',obj.name)
+assert roof_count==516,roof_count
 uv=terrain.data.uv_layers['GSI_WebMercator']
 metas=[json.loads((ROOT/'data/aerial'/name/'metadata.json').read_text()) for name in ('naoshima','honmura_detail','miyanoura_detail')]
 for pi in range(0,len(terrain.data.polygons),997):
@@ -56,6 +92,6 @@ for mat in terrain.data.materials:
     assert len(images)==1 and images[0].packed_file,'Unpacked aerial texture'
 for road in bpy.data.collections['Roads'].objects:
     assert all(p.normal.z>0 for p in road.data.polygons),'Inverted road normals'
-report=dict(buildings=len(buildings),individual_buildings=2,ferry_berth='water clearance checked',courtyard_buildings=1,marine_station=1,roads=len(bpy.data.collections['Roads'].objects),trees=len(bpy.data.objects['ForestPoints'].data.vertices),terrain_vertices=len(terrain.data.vertices),terrain_faces=len(terrain.data.polygons),packed_aerial_maps=len(terrain.data.materials),status='PASS')
+report=dict(buildings=len(buildings),individual_buildings=3,ferry_berth='water clearance checked',courtyard_buildings=1,marine_station=1,roads=len(bpy.data.collections['Roads'].objects),trees=len(bpy.data.objects['ForestPoints'].data.vertices),terrain_vertices=len(terrain.data.vertices),terrain_faces=len(terrain.data.polygons),packed_aerial_maps=len(terrain.data.materials),status='PASS')
 (ROOT/'output/validation_audit.json').write_text(json.dumps(report,indent=2))
 print('VALIDATION_PASS',report,flush=True)

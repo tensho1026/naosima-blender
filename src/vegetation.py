@@ -17,20 +17,34 @@ from .osm import OsmData
 Vec2 = Tuple[float, float]
 
 
-def _forest_rings(osm: OsmData, crs: CRS) -> List[List[Vec2]]:
-    rings = []
+def _forest_regions(osm: OsmData, crs: CRS):
+    from .osm_geometry import member_rings
+    regions = []
+    members=set()
+    for relation in osm.relations:
+        if relation.tags.get('natural') not in ('wood','forest','scrub') and relation.tags.get('landuse')!='forest':continue
+        outers=[[crs.to_xy(*p) for p in r] for r in member_rings(relation,osm,'outer')]
+        holes=[[crs.to_xy(*p) for p in r] for r in member_rings(relation,osm,'inner')]
+        if not outers:continue
+        members.update(m['ref'] for m in relation.members if m['type']=='way')
+        for outer in outers:
+            inside=[h for h in holes if point_in_ring(*h[0],outer)]
+            regions.append((outer,inside,f'OSM relation/{relation.id}'))
+    seen=set()
     for key, values in (
         ("natural", ("wood", "forest", "scrub")),
         ("landuse", ("forest",)),
     ):
         for w in osm.closed_ways_with(key, values):
+            if w.id in members or w.id in seen:continue
+            seen.add(w.id)
             ring = drop_closing([crs.to_xy(lat, lon) for lat, lon in w.coords])
             if abs(ring_area(ring)) > 80.0:
-                rings.append(ring)
-    return rings
+                regions.append((ring,[],f'OSM way/{w.id}'))
+    return regions
 
 
-def _random_points_in_ring(ring: List[Vec2], n: int, rng: random.Random) -> List[Vec2]:
+def _random_points_in_ring(ring: List[Vec2], n: int, rng: random.Random, holes=()) -> List[Vec2]:
     xs = [p[0] for p in ring]
     ys = [p[1] for p in ring]
     xmin, xmax = min(xs), max(xs)
@@ -41,7 +55,7 @@ def _random_points_in_ring(ring: List[Vec2], n: int, rng: random.Random) -> List
         tries += 1
         x = rng.uniform(xmin, xmax)
         y = rng.uniform(ymin, ymax)
-        if point_in_ring(x, y, ring):
+        if point_in_ring(x, y, ring) and not any(point_in_ring(x,y,h) for h in holes):
             pts.append((x, y))
     return pts
 
@@ -144,7 +158,7 @@ def _make_gn_instances(points_obj: bpy.types.Object, prototypes: List[bpy.types.
 
     mod = points_obj.modifiers.new("ForestGN", "NODES")
     mod.node_group = ng
-    points_obj[density_note] = True
+    points_obj['placement_source'] = density_note
 
 
 def _rock_proto(mats: dict) -> bpy.types.Object:
@@ -176,17 +190,17 @@ def build_vegetation(
     trees = [_low_poly_tree(f"Tree_{i}", mats, rng) for i in range(3)]
     _rock_proto(mats)
 
-    rings = _forest_rings(osm, crs)
+    regions = _forest_regions(osm, crs)
     points: List[Tuple[float, float, float]] = []
     # If OSM has little forest, fall back to elevated DEM cells (documented as fallback).
     target = cfg.max_trees if cfg.lod > 0 else min(2500, cfg.max_trees)
-    if rings:
-        areas = [abs(ring_area(r)) for r in rings]
+    if regions:
+        areas = [max(0,abs(ring_area(r))-sum(abs(ring_area(h)) for h in holes)) for r,holes,_ in regions]
         total = sum(areas) or 1.0
-        for ring, area in zip(rings, areas):
+        for (ring,holes,region_source), area in zip(regions, areas):
             n = int(min(area * cfg.tree_density, target * (area / total)))
             n = max(1, n)
-            for x, y in _random_points_in_ring(ring, n, rng):
+            for x, y in _random_points_in_ring(ring, n, rng,holes):
                 z = sampler.height_at_xy(x, y)
                 if z <= cfg.sea_level + 0.8:
                     continue
@@ -195,7 +209,7 @@ def build_vegetation(
                     break
             if len(points) >= target:
                 break
-        source = "OSM forest/wood polygons"
+        source = "OSM forest/wood polygons including multipolygons; inner clearings excluded"
     else:
         source = "FALLBACK: no OSM forest polygons; points on elevated DEM (see README)"
         print("[vegetation] WARNING: no OSM forest polygons, using elevation fallback")
@@ -208,6 +222,9 @@ def build_vegetation(
     # Point cloud mesh (vertices only) + Geometry Nodes instances
     verts = points
     obj = new_mesh_object("ForestPoints", verts, [], col)
+    obj['landcover_region_count']=len(regions)
+    obj['landcover_relation_sources']='; '.join(sorted({s for _,_,s in regions if 'relation/' in s}))
+    obj['fidelity']='Mapped forest extent; tree species, counts, sizes and exact positions estimated'
     try:
         _make_gn_instances(obj, trees, source)
     except Exception as exc:  # noqa: BLE001

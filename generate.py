@@ -51,7 +51,7 @@ def main() -> None:
             cfg.max_trees = 10000
             cfg.dem_zoom = 14
     if args.refined:
-        cfg.aerial=True;cfg.lod=2;cfg.max_trees=45000;cfg.tree_density=0.012
+        cfg.aerial=True;cfg.lod=2;cfg.max_trees=180000;cfg.tree_density=0.024
     generate(cfg, do_render=args.render_previews,blend_name='naoshima_refined.blend' if args.refined else 'naoshima.blend')
 
 

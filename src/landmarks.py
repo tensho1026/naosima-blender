@@ -151,6 +151,12 @@ def build_landmarks(
         if _try_append_asset(spec, (x, y, z)):
             placed += 1
             continue
+        if spec.key == "red_pumpkin" and cfg.aerial:
+            from .red_pumpkin import build_red_pumpkin
+            art=build_red_pumpkin(x,y,z)
+            art['position_source']=src
+            placed += 1
+            continue
         if spec.kind == "placeholder_art":
             _placeholder_art(f"Placeholder_{spec.key}", x, y, z, mats, col)
             placed += 1

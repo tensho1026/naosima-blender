@@ -88,3 +88,49 @@ def apply_aerial(obj, crs, cfg, overlay=False):
     obj['source']=SOURCE
     obj['imagery_date']=meta['capture_date']
     return mat
+
+def apply_miyanoura_roof_imagery(crs):
+    """Project measured geographic imagery onto roof faces, leaving walls untouched.
+
+    This is appearance evidence only: shadows/ortho displacement remain and roof
+    geometry is still estimated. Individually modelled buildings are excluded.
+    """
+    import bpy
+    root=Path(__file__).resolve().parents[1]/'data/aerial/miyanoura_detail'
+    meta=json.loads((root/'metadata.json').read_text())
+    south,west,north,east=meta['bbox']
+    nx,ny=meta['x1']-meta['x0']+1,meta['y1']-meta['y0']+1
+    mat=bpy.data.materials.get('GSI_Miyanoura_Observed_Roofs')
+    if mat is None:
+        mat=bpy.data.materials.new('GSI_Miyanoura_Observed_Roofs');mat.use_nodes=True
+        nt=mat.node_tree;bsdf=next(n for n in nt.nodes if n.type=='BSDF_PRINCIPLED')
+        bsdf.inputs['Roughness'].default_value=.82
+        img=bpy.data.images.load(str(root/'orthophoto.png'),check_existing=True);img.pack()
+        tex=nt.nodes.new('ShaderNodeTexImage');tex.image=img
+        uvnode=nt.nodes.new('ShaderNodeUVMap');uvnode.uv_map='GSI_Roof_WebMercator'
+        nt.links.new(uvnode.outputs['UV'],tex.inputs['Vector'])
+        nt.links.new(tex.outputs['Color'],bsdf.inputs['Base Color'])
+        mat['source']=SOURCE
+    count=0
+    for obj in bpy.data.objects:
+        if not obj.name.startswith('bldg_') or obj.type!='MESH':continue
+        coords=[]
+        for vertex in obj.data.vertices:
+            p=obj.matrix_world@vertex.co;lat,lon=crs.to_latlon(p.x,p.y)
+            if not(south<=lat<=north and west<=lon<=east):break
+            x,y=tile_xy(lat,lon,meta['zoom'])
+            coords.append(((x-meta['x0'])/nx,1-(y-meta['y0'])/ny))
+        else:
+            slot=next((i for i,m in enumerate(obj.data.materials) if m==mat),None)
+            if slot is None:slot=len(obj.data.materials);obj.data.materials.append(mat)
+            uv=obj.data.uv_layers.get('GSI_Roof_WebMercator') or obj.data.uv_layers.new(name='GSI_Roof_WebMercator')
+            roofs=[poly for poly in obj.data.polygons if poly.normal.z>.15]
+            for poly in roofs:
+                poly.material_index=slot
+                for li in poly.loop_indices:uv.data[li].uv=coords[obj.data.loops[li].vertex_index]
+            if roofs:
+                obj['roof_appearance_source']=SOURCE
+                obj['roof_appearance_status']='Georeferenced aerial projection; capture date unknown; shadows and alignment errors remain; geometry NOT verified'
+                count+=1
+    print(f'[aerial] Miyanoura individually georeferenced roof appearances: {count}')
+    return count

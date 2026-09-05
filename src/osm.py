@@ -83,6 +83,8 @@ OVERPASS_QUERY = """
 (
   way["building"]({s},{w},{n},{e});
   relation["building"]({s},{w},{n},{e});
+  relation["natural"~"^(wood|forest|scrub)$"]({s},{w},{n},{e});
+  relation["landuse"="forest"]({s},{w},{n},{e});
   way["highway"]({s},{w},{n},{e});
   way["landuse"]({s},{w},{n},{e});
   way["natural"]({s},{w},{n},{e});

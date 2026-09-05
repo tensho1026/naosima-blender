@@ -41,6 +41,13 @@ def main():
                           'walls':'dark weathered vertical timber boards',
                           'site':'raised timber deck, planters, sculpted trees, green parasol'},
                 unknown=['photo_to_footprint_alignment','roof_subvolumes','exact_dimensions','rear_openings'])
+        if way.id==1307364185:
+            row.update(exterior_status='photo_model_in_progress',reference_urls=[
+                'https://www.postmap.org/photo/1206913',
+                'https://location.sevenbank.co.jp/sevenbank/spot/detail?code=0000033134'],
+                observed={'front':'left brown brick pier; right-side entry; frosted lower glazing; red post box',
+                          'reference_date':'2024-12-18 after relocation'},
+                unknown=['exact_dimensions','rear','roof_equipment','fine_signage','parking_extent'])
         rows.append(row)
     rows.sort(key=lambda r:r['osm_way_id'])
     document={'scope':'Miyanoura working research envelope; not an exhaustive real-world building census',

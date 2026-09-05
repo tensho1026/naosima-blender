@@ -166,17 +166,21 @@
     },
     {
       "osm_way_id": 1307364185,
-      "exterior_status": "unverified",
-      "reference_urls": [],
-      "observed": {},
+      "exterior_status": "photo_model_in_progress",
+      "reference_urls": [
+        "https://www.postmap.org/photo/1206913",
+        "https://location.sevenbank.co.jp/sevenbank/spot/detail?code=0000033134"
+      ],
+      "observed": {
+        "front": "left brown brick pier; right-side entry; frosted lower glazing; red post box",
+        "reference_date": "2024-12-18 after relocation"
+      },
       "unknown": [
-        "height",
-        "roof_geometry",
-        "wall_materials",
-        "front_openings",
-        "side_openings",
-        "rear_openings",
-        "boundary_details"
+        "exact_dimensions",
+        "rear",
+        "roof_equipment",
+        "fine_signage",
+        "parking_extent"
       ],
       "name": "セブン-イレブン",
       "centroid_latlon": [
