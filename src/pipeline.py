@@ -48,9 +48,15 @@ def generate(cfg: LocationConfig, do_render: bool = False, blend_name: str = "na
     build_ocean(cfg, crs, mats)
     build_coastline(cfg, dem, crs, osm, mats)
     build_buildings(cfg, osm, crs, sampler, mats)
+    if cfg.aerial:
+        from .individual_buildings import build_individual_buildings
+        build_individual_buildings(cfg,osm,crs,sampler)
     build_roads(cfg, osm, crs, sampler, mats)
     build_vegetation(cfg, osm, crs, sampler, mats)
     build_landmarks(cfg, osm, crs, sampler, mats)
+    if cfg.aerial:
+        from .ferry import build_ferry
+        build_ferry(cfg,crs)
     setup_lighting(cfg)
     setup_cameras(cfg, crs, sampler)
     if cfg.aerial:

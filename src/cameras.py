@@ -68,3 +68,33 @@ def refine_review_cameras(cfg,crs):
             link_object(cam,collection('Cameras'))
         cam.location=target+Vector((-100,-100,85));cam.data.lens=44;cam.data.clip_end=20000
         cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler()
+
+    ferry=bpy.data.objects.get('Ferry_Naoshima_2015')
+    if ferry:
+        bpy.context.view_layer.update()
+        cam=bpy.data.objects.get('Camera_Ferry')
+        if cam is None:
+            cam=bpy.data.objects.new('Camera_Ferry',bpy.data.cameras.new('Camera_Ferry'));link_object(cam,collection('Cameras'))
+        target=ferry.matrix_world@Vector((0,0,5))
+        cam.location=ferry.matrix_world@Vector((-90,-105,46))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=48;cam.data.clip_end=20000
+
+    shop=bpy.data.objects.get('Individual_ArtIslandCenter_1361954806')
+    if shop:
+        bpy.context.view_layer.update()
+        cam=bpy.data.objects.get('Camera_ArtIslandCenter')
+        if cam is None:
+            cam=bpy.data.objects.new('Camera_ArtIslandCenter',bpy.data.cameras.new('Camera_ArtIslandCenter'));link_object(cam,collection('Cameras'))
+        target=shop.matrix_world@Vector((0,-1,2.2))
+        cam.location=shop.matrix_world@Vector((-8,14,6.5))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=45;cam.data.clip_end=20000
+
+    house=bpy.data.objects.get('Individual_NaoPAM_1361901029')
+    if house:
+        bpy.context.view_layer.update()
+        cam=bpy.data.objects.get('Camera_NaoPAM')
+        if cam is None:
+            cam=bpy.data.objects.new('Camera_NaoPAM',bpy.data.cameras.new('Camera_NaoPAM'));link_object(cam,collection('Cameras'))
+        target=house.matrix_world@Vector((6,-3,2.8))
+        cam.location=house.matrix_world@Vector((-12,16,10))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=45;cam.data.clip_end=20000

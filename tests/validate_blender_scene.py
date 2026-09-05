@@ -9,7 +9,22 @@ from src.aerial import tile_xy
 bpy.ops.wm.open_mainfile(filepath=str(ROOT/'output/naoshima_refined.blend'))
 scene=bpy.context.scene
 buildings=[o for o in bpy.data.objects if o.name.startswith('bldg_')]
-assert len(buildings)==1547,len(buildings)
+assert len(buildings)==1545,len(buildings)
+assert 'bldg_1361954806' not in bpy.data.objects,'Duplicate Art Island Center envelope'
+assert 'Individual_ArtIslandCenter_1361954806' in bpy.data.objects
+assert 'bldg_1361901029' not in bpy.data.objects,'Duplicate NaoPAM envelope'
+assert 'Individual_NaoPAM_1361901029' in bpy.data.objects
+ferry=bpy.data.objects['Ferry_Naoshima_2015']
+# At the berth the hull must stay over water; do not infer this from its origin.
+from mathutils import Vector
+from mathutils.bvhtree import BVHTree
+coast=bpy.data.objects['Terrain']
+bvh=BVHTree.FromObject(coast,bpy.context.evaluated_depsgraph_get())
+for x in range(-33,34,3):
+    for y in range(-6,7,2):
+        point=ferry.matrix_world @ Vector((x,y,100))
+        hit=bvh.ray_cast(coast.matrix_world.inverted() @ point,Vector((0,0,-1)))
+        assert hit[0] is None,('Ferry intersects land at berth',x,y,hit[0])
 assert 'bldg_401738807' not in bpy.data.objects,'Underground museum extruded above ground'
 assert 'bldg_75615686' not in bpy.data.objects,'Duplicate terminal envelope'
 assert 'MarineStation_OSM_Roof' in bpy.data.objects
@@ -41,6 +56,6 @@ for mat in terrain.data.materials:
     assert len(images)==1 and images[0].packed_file,'Unpacked aerial texture'
 for road in bpy.data.collections['Roads'].objects:
     assert all(p.normal.z>0 for p in road.data.polygons),'Inverted road normals'
-report=dict(buildings=len(buildings),courtyard_buildings=1,marine_station=1,roads=len(bpy.data.collections['Roads'].objects),trees=len(bpy.data.objects['ForestPoints'].data.vertices),terrain_vertices=len(terrain.data.vertices),terrain_faces=len(terrain.data.polygons),packed_aerial_maps=len(terrain.data.materials),status='PASS')
+report=dict(buildings=len(buildings),individual_buildings=2,ferry_berth='water clearance checked',courtyard_buildings=1,marine_station=1,roads=len(bpy.data.collections['Roads'].objects),trees=len(bpy.data.objects['ForestPoints'].data.vertices),terrain_vertices=len(terrain.data.vertices),terrain_faces=len(terrain.data.polygons),packed_aerial_maps=len(terrain.data.materials),status='PASS')
 (ROOT/'output/validation_audit.json').write_text(json.dumps(report,indent=2))
 print('VALIDATION_PASS',report,flush=True)

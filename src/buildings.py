@@ -74,6 +74,11 @@ def build_buildings(
     estimated = 0
     audit = []
     for way in ways:
+        if cfg.aerial and cfg.location_id=='naoshima':
+            from .individual_buildings import INDIVIDUAL_BUILDINGS
+            if way.id in INDIVIDUAL_BUILDINGS:
+                audit.append(dict(osm_id=way.id,status='Individual photo-referenced exterior',asset=INDIVIDUAL_BUILDINGS[way.id]))
+                continue
         if cfg.location_id == 'naoshima' and way.id == 75615686 and any(s.key == 'marine_station' for s in cfg.landmarks):
             audit.append(dict(osm_id=way.id,status='modeled as Marine Station using this footprint'))
             continue

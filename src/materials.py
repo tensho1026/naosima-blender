@@ -106,8 +106,16 @@ def make_materials() -> Dict[str, bpy.types.Material]:
         mats["Water"].use_screen_refraction = True
     _noise_bump(nt, bsdf, scale=40.0, strength=0.04)
 
+    coords=nt.nodes.new('ShaderNodeTexCoord')
+    for node in nt.nodes:
+        if node.type=='TEX_NOISE':
+            node.inputs['Scale'].default_value=0.65
+            nt.links.new(coords.outputs['Object'],node.inputs['Vector'])
+        elif node.type=='BUMP':
+            node.inputs['Strength'].default_value=.18
+            node.inputs['Distance'].default_value=.045
     nt, bsdf = new("Foliage")
-    _set_color(bsdf, (0.035, 0.085, 0.018), roughness=0.85)
+    _set_color(bsdf, (0.045, 0.14, 0.019), roughness=0.85)
 
     nt, bsdf = new("Trunk")
     _set_color(bsdf, (0.18, 0.10, 0.06), roughness=0.9)
