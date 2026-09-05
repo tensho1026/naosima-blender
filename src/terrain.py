@@ -69,6 +69,19 @@ def _classify_point(x: float, y: float, slope: float, elev: float, polys) -> int
 
 
 def build_terrain(cfg: LocationConfig, dem: DEMGrid, crs: CRS, osm: OsmData, mats: dict, sampler: TerrainSampler):
+    from pathlib import Path
+    import json
+    cache=Path(__file__).resolve().parents[1]/'data/cache/coastal_terrain.npz'
+    if cfg.aerial and cfg.location_id=='naoshima' and cache.exists():
+        meta=json.loads(cache.with_suffix('.json').read_text())
+        if tuple(meta['bbox']) != tuple(cfg.bbox) or meta['dem_layer']!=cfg.dem_layer or meta['dem_zoom']!=cfg.dem_zoom:
+            raise RuntimeError('Coastal mesh cache configuration mismatch; rerun scripts/prepare_coastal_terrain.py')
+        with np.load(cache) as data:
+            obj=new_mesh_object('Terrain',data['vertices'].tolist(),data['faces'].tolist(),collection('Terrain'))
+        assign_material(obj,mats['Terrain']);shade_smooth(obj)
+        obj['source']=meta['source'];obj['closed_coast_polygons']=meta['closed_coast_polygons']
+        print(f"[terrain] loaded OSM-clipped coast: {len(obj.data.vertices)} vertices")
+        return obj
     grid = subsample_for_lod(dem, cfg.lod)
     ny, nx = grid.ny, grid.nx
     print(f"[terrain] mesh {nx} x {ny}")
@@ -108,7 +121,9 @@ def build_terrain(cfg: LocationConfig, dem: DEMGrid, crs: CRS, osm: OsmData, mat
 
     faces: List[Tuple[int, int, int, int]] = []
     face_mat: List[int] = []
-    polys = _landuse_polygons(osm, crs)
+    from pathlib import Path
+    aerial_ready=(Path(__file__).resolve().parents[1]/'data/aerial'/cfg.location_id/'metadata.json').exists()
+    polys = [] if aerial_ready else _landuse_polygons(osm, crs)
 
     for j in range(ny - 1):
         for i in range(nx - 1):
@@ -118,13 +133,26 @@ def build_terrain(cfg: LocationConfig, dem: DEMGrid, crs: CRS, osm: OsmData, mat
             d = int(vert_index[j + 1, i])
             if min(a, b, c, d) < 0:
                 continue
-            faces.append((a, b, c, d))
+            faces.append((d, c, b, a))
             cx = (verts[a][0] + verts[b][0] + verts[c][0] + verts[d][0]) / 4.0
             cy = (verts[a][1] + verts[b][1] + verts[c][1] + verts[d][1]) / 4.0
             cz = (verts[a][2] + verts[b][2] + verts[c][2] + verts[d][2]) / 4.0
-            slope = sampler.slope_at_xy(cx, cy)
-            face_mat.append(_classify_point(cx, cy, slope, cz, polys))
+            if aerial_ready:
+                face_mat.append(MAT_TERRAIN)
+            else:
+                slope = sampler.slope_at_xy(cx, cy)
+                face_mat.append(_classify_point(cx, cy, slope, cz, polys))
 
+    # Close exposed edges down below water; avoids a floating, paper-thin island.
+    from collections import Counter
+    edges=Counter(tuple(sorted((a,b))) for face in faces for a,b in zip(face,face[1:]+face[:1]))
+    boundary=[(a,b) for face in faces for a,b in zip(face,face[1:]+face[:1]) if edges[tuple(sorted((a,b)))]==1]
+    lower={}
+    for a,b in boundary:
+        for vi in (a,b):
+            if vi not in lower:
+                x,y,z=verts[vi];lower[vi]=len(verts);verts.append((x,y,(sea-2)*crs.scale))
+        faces.append((b,a,lower[a],lower[b]));face_mat.append(MAT_ROCK)
     col = collection("Terrain")
     obj = new_mesh_object("Terrain", verts, faces, col)
     # Multi-material

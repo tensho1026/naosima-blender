@@ -47,62 +47,33 @@ def _random_points_in_ring(ring: List[Vec2], n: int, rng: random.Random) -> List
 
 
 def _low_poly_tree(name: str, mats: dict, rng: random.Random) -> bpy.types.Object:
-    kind = rng.choice(("broadleaf", "conifer", "pine"))
-    trunk_r = 0.18 if kind != "pine" else 0.14
-    trunk_h = 2.2 if kind == "broadleaf" else 3.0
-    verts = [
-        (-trunk_r, -trunk_r, 0),
-        (trunk_r, -trunk_r, 0),
-        (trunk_r, trunk_r, 0),
-        (-trunk_r, trunk_r, 0),
-        (-trunk_r * 0.7, -trunk_r * 0.7, trunk_h),
-        (trunk_r * 0.7, -trunk_r * 0.7, trunk_h),
-        (trunk_r * 0.7, trunk_r * 0.7, trunk_h),
-        (-trunk_r * 0.7, trunk_r * 0.7, trunk_h),
-    ]
-    faces = [(0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]
-    if kind == "conifer":
-        cr = 1.6
-        ch = 5.5
-        verts += [
-            (-cr, -cr, trunk_h * 0.6),
-            (cr, -cr, trunk_h * 0.6),
-            (cr, cr, trunk_h * 0.6),
-            (-cr, cr, trunk_h * 0.6),
-            (0, 0, trunk_h + ch),
-        ]
-        b = 8
-        faces += [(b, b + 1, b + 4), (b + 1, b + 2, b + 4), (b + 2, b + 3, b + 4), (b + 3, b, b + 4)]
-    else:
-        cr = 2.1 if kind == "broadleaf" else 1.4
-        cz = trunk_h + (1.8 if kind == "broadleaf" else 1.2)
-        verts += [
-            (-cr, -cr, trunk_h),
-            (cr, -cr, trunk_h),
-            (cr, cr, trunk_h),
-            (-cr, cr, trunk_h),
-            (-cr, -cr, cz),
-            (cr, -cr, cz),
-            (cr, cr, cz),
-            (-cr, cr, cz),
-        ]
-        b = 8
-        faces += [
-            (b, b + 1, b + 5, b + 4),
-            (b + 1, b + 2, b + 6, b + 5),
-            (b + 2, b + 3, b + 7, b + 6),
-            (b + 3, b, b + 4, b + 7),
-            (b + 4, b + 5, b + 6, b + 7),
-        ]
-    col = collection("TreeAssets")
-    obj = new_mesh_object(name, verts, faces, col)
-    assign_material(obj, mats["Trunk"])
-    obj.data.materials.append(mats["Foliage"])
-    for p in obj.data.polygons:
-        if p.center.z > trunk_h * 0.5:
-            p.material_index = 1
-    obj.hide_render = True
-    obj.hide_viewport = True
+    import bmesh
+    from mathutils import Matrix, Vector
+    bm=bmesh.new()
+    trunk=bmesh.ops.create_cone(bm,cap_ends=True,cap_tris=False,segments=8,radius1=0.19,radius2=0.09,depth=4.5)
+    bmesh.ops.translate(bm,verts=trunk['verts'],vec=Vector((0,0,2.25)))
+    for face in bm.faces: face.material_index=0
+    # Irregular, layered broadleaf crown; shape is illustrative, not tree survey.
+    for i in range(11):
+        angle=i*2.39996
+        radius=0 if i==0 else rng.uniform(0.6,2.1)
+        center=Vector((math.cos(angle)*radius,math.sin(angle)*radius,rng.uniform(3.4,5.7)))
+        result=bmesh.ops.create_icosphere(bm,subdivisions=2,radius=1)
+        newverts=result['verts']
+        for v in newverts:
+            v.co.x*=rng.uniform(1.1,1.55)
+            v.co.y*=rng.uniform(1.1,1.55)
+            v.co.z*=rng.uniform(0.85,1.4)
+            v.co+=center
+        for v in newverts:
+            for face in v.link_faces:face.material_index=1
+    mesh=bpy.data.meshes.new(name);bm.to_mesh(mesh);bm.free()
+    obj=bpy.data.objects.new(name,mesh)
+    link_object(obj,collection('TreeAssets'))
+    obj.data.materials.append(mats['Trunk']);obj.data.materials.append(mats['Foliage'])
+    for p in mesh.polygons:p.use_smooth=p.material_index==1
+    obj.hide_render=True;obj.hide_viewport=True
+    obj['status']='ESTIMATED broadleaf canopy'
     return obj
 
 
@@ -122,7 +93,12 @@ def _make_gn_instances(points_obj: bpy.types.Object, prototypes: List[bpy.types.
     mesh2pts.location = (-500, 0)
     links.new(n_in.outputs["Geometry"], mesh2pts.inputs["Mesh"])
 
-    coll = bpy.data.collections.get("TreeAssets")
+    name='TreePrototypes' if prototypes else 'RockPrototypes'
+    coll=bpy.data.collections.get(name) or bpy.data.collections.new(name)
+    wanted=prototypes or [bpy.data.objects.get('RockAsset')]
+    for obj in list(coll.objects):coll.objects.unlink(obj)
+    for obj in wanted:
+        if obj is not None:coll.objects.link(obj)
     info = nodes.new("GeometryNodeCollectionInfo")
     info.location = (-500, -250)
     info.inputs["Separate Children"].default_value = True
@@ -149,6 +125,10 @@ def _make_gn_instances(points_obj: bpy.types.Object, prototypes: List[bpy.types.
     inst.inputs["Pick Instance"].default_value = True
     links.new(mesh2pts.outputs["Points"], inst.inputs["Points"])
     links.new(info.outputs["Instances"], inst.inputs["Instance"])
+    index=nodes.new('FunctionNodeRandomValue');index.data_type='INT'
+    index.inputs['Min'].default_value=0
+    index.inputs['Max'].default_value=max(0,len(wanted)-1)
+    links.new(index.outputs['Value'],inst.inputs['Instance Index'])
     # Rotation / scale sockets
     if "Rotation" in inst.inputs:
         links.new(rnd_rot.outputs["Value"], inst.inputs["Rotation"])

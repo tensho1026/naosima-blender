@@ -36,7 +36,7 @@ def _parse_levels(tags: dict) -> Optional[int]:
     if not raw:
         return None
     try:
-        return max(1, int(float(raw)))
+        return max(0, int(float(raw)))
     except ValueError:
         return None
 
@@ -46,7 +46,7 @@ def estimated_height(tags: dict) -> Tuple[float, bool]:
     if h and h > 0.5:
         return h, False
     levels = _parse_levels(tags)
-    if levels:
+    if levels is not None:
         return levels * STORY_HEIGHT_M, True
     btype = tags.get("building", "yes")
     levels = DEFAULT_LEVELS_BY_TYPE.get(btype, 2)
@@ -58,46 +58,7 @@ def _footprint_xy(way: OsmWay, crs: CRS) -> List[Vec2]:
     return drop_closing(pts)
 
 
-def _extrude_mesh(ring: List[Vec2], z0: float, height: float, gable: bool):
-    n = len(ring)
-    if n < 3:
-        return None, None
-    area = abs(ring_area(ring))
-    if area < 4.0:
-        return None, None
-    if ring_area(ring) < 0:
-        ring = list(reversed(ring))
-    z1 = z0 + height
-    verts: List[Tuple[float, float, float]] = []
-    for x, y in ring:
-        verts.append((x, y, z0))
-    for x, y in ring:
-        verts.append((x, y, z1))
-    faces: List[Tuple[int, ...]] = []
-    # sides
-    for i in range(n):
-        j = (i + 1) % n
-        faces.append((i, j, n + j, n + i))
-    # bottom (downward)
-    faces.append(tuple(range(n - 1, -1, -1)))
-    if gable and n >= 4:
-        dx, dy = longest_edge_dir(ring)
-        cx = sum(p[0] for p in ring) / n
-        cy = sum(p[1] for p in ring) / n
-        ridge_h = z1 + min(2.2, height * 0.35)
-        # two ridge points along longest direction
-        span = math.sqrt(area) * 0.35
-        r0 = (cx + dx * span, cy + dy * span, ridge_h)
-        r1 = (cx - dx * span, cy - dy * span, ridge_h)
-        ri0 = len(verts)
-        verts.append(r0)
-        verts.append(r1)
-        # roof as two quads approx using top ring fan to ridge — simple tent
-        faces.append(tuple(range(n, 2 * n)))  # still cap, then extra gable faces
-        faces.append((ri0, ri0 + 1, 2 * n - 1))
-    else:
-        faces.append(tuple(range(n, 2 * n)))
-    return verts, faces
+from .building_geometry import extrude as _extrude_mesh, rectangle
 
 
 def build_buildings(
@@ -108,10 +69,14 @@ def build_buildings(
     mats: dict,
 ):
     col = collection("Buildings")
-    ways = [w for w in osm.ways if "building" in w.tags and len(w.coords) >= 4]
+    ways = [w for w in osm.ways if w.tags.get("building") not in (None, "no") and len(w.coords) >= 4 and w.coords[0] == w.coords[-1]]
     count = 0
     estimated = 0
+    audit = []
     for way in ways:
+        if cfg.location_id == 'naoshima' and way.id == 75615686 and any(s.key == 'marine_station' for s in cfg.landmarks):
+            audit.append(dict(osm_id=way.id,status='modeled as Marine Station using this footprint'))
+            continue
         if count >= cfg.max_buildings:
             break
         ring = _footprint_xy(way, crs)
@@ -123,35 +88,94 @@ def build_buildings(
         zs = [sampler.height_at_xy(x, y) for x, y in ring[:: max(1, len(ring) // 8)] or ring]
         z0 = max(zs) if zs else sampler.height_at_xy(cx, cy)
         height, is_est = estimated_height(way.tags)
+        photo_museum = cfg.location_id == 'naoshima' and way.id == 1465161307
+        if photo_museum:
+            # Official: one above-ground floor; total height inferred from exterior photo.
+            height=6.5;is_est=True
         c = way_centroid(way)
         key = classify_latlon(cfg, crs, c[0], c[1]) if c else "other"
         style = district_style(cfg, key)
-        gable = style == "traditional" and cfg.lod >= 1
-        if style == "traditional":
-            height *= 0.92
-        elif style == "modern_port" and way.tags.get("building") in ("warehouse", "industrial", "retail"):
-            height *= 1.15
+        if height <= 0:
+            audit.append(dict(osm_id=way.id, name=way.tags.get('name',''), status='underground: above-ground levels zero'))
+            continue
+        roof_shape = way.tags.get('roof:shape')
+        domestic = way.tags.get('building') in ('yes','house','detached','residential','terrace','semidetached_house')
+        gable = (roof_shape == 'gabled' or (roof_shape is None and domestic and style in ('traditional','fishing','modern_port','mixed'))) and cfg.lod >= 1
         verts, faces = _extrude_mesh(ring, z0, height, gable=gable)
+        if photo_museum:
+            from .building_geometry import pitched_outline
+            verts,faces=pitched_outline(ring,z0,height,3.2)
         if not verts:
             continue
         if is_est:
             estimated += 1
         obj = new_mesh_object(f"bldg_{way.id}", verts, faces, col)
-        if style == "traditional":
-            assign_material(obj, mats["TraditionalWall"])
-            # second slot for roof
-            obj.data.materials.append(mats["Roof"])
-            nfaces = len(obj.data.polygons)
-            if nfaces:
-                obj.data.polygons[nfaces - 1].material_index = 1
-        elif style in ("museum",):
-            assign_material(obj, mats["Concrete"])
-        else:
-            assign_material(obj, mats["ModernWall"])
-            obj.data.materials.append(mats["RoofModern"])
-            nfaces = len(obj.data.polygons)
-            if nfaces:
-                obj.data.polygons[nfaces - 1].material_index = 1
+        name = ' '.join(way.tags.get(k,'') for k in ('name','name:ja','name:en'))
+        wall = mats['TraditionalWall'] if style == 'traditional' else mats['ModernWall']
+        if '直島新美術館' in name:
+            wall = mats['BlackPlaster']
+        elif way.tags.get('tourism') == 'museum':
+            wall = mats['Concrete']
+        assign_material(obj, wall)
+        obj.data.materials.append(mats['Roof'] if gable else mats['RoofModern'])
+        for poly in obj.data.polygons:
+            if poly.normal.z > 0.15:
+                poly.material_index = 1
+        obj['osm_id'] = way.id
+        obj['source'] = f'https://www.openstreetmap.org/way/{way.id}'
+        obj['name_original'] = name.strip()
+        obj['height_m'] = height
+        obj['height_status'] = 'ESTIMATED from levels/default' if is_est else 'OSM height'
+        obj['roof_status'] = 'OSM shape' if roof_shape else 'ESTIMATED typology; complex footprints flat'
+        if photo_museum:
+            obj['roof_status']='Pitched roof observed in official photo; ridge and pitch estimated'
+            obj['reference']='https://benesse-artsite.jp/nnmoa/art/'
+            obj['reference_photo']='https://benesse-artsite.jp/nnmoa/uploads/architecture_04.jpg'
+            obj['above_ground_floors']=1
+        obj['facade_status'] = 'UNKNOWN; procedural openings are illustrative'
+        obj['osm_tags'] = __import__('json').dumps(way.tags,ensure_ascii=False)
+        # A continuous plinth connects the level building to sloping DEM samples.
+        low = min(zs)-0.2
+        if z0-low>0.25:
+            fv,ff=_extrude_mesh(ring,low,z0-low,False)
+            foundation=new_mesh_object(f'foundation_{way.id}',fv,ff,col)
+            assign_material(foundation,mats['Concrete'])
+            foundation['status']='ESTIMATED terrain foundation'
+        if cfg.lod >= 2 and domestic and not photo_museum and rectangle(ring) and height < 15:
+            _facade_details(way.id,ring,z0,height,col,mats)
+        audit.append(dict(osm_id=way.id,name=name.strip(),height_m=height,height_estimated=is_est,roof=obj['roof_status'],source=obj['source']))
         count += 1
     print(f"[buildings] created={count} estimated_height={estimated} osm_ways={len(ways)}")
+    from .courtyards import build_courtyards
+    audit.extend(build_courtyards(cfg,osm,crs,sampler,mats,col))
+    from .paths import output_dir
+    import json
+    (output_dir()/'building_audit.json').write_text(json.dumps(audit,ensure_ascii=False,indent=2))
     return count
+
+
+def _facade_details(osm_id,ring,z0,height,col,mats):
+    """Plausible openings only. No claim of individual facade survey."""
+    from .building_geometry import area
+    if area(ring)<0:
+        ring=list(reversed(ring))
+    verts=[]; faces=[]; indices=[]
+    floors=max(1,min(3,int(height/3)))
+    for a,b in zip(ring,ring[1:]+ring[:1]):
+        length=math.dist(a,b)
+        if length<3: continue
+        dx,dy=(b[0]-a[0])/length,(b[1]-a[1])/length
+        nx,ny=dy,-dx
+        bays=max(1,int(length/3.2))
+        for floor in range(floors):
+            for bay in range(bays):
+                center=(bay+0.5)*length/bays
+                for width,wh,offset,mi in ((1.5,1.35,0.025,0),(1.32,1.17,0.035,1)):
+                    base=len(verts)
+                    for along,up in ((-width/2,0),(width/2,0),(width/2,wh),(-width/2,wh)):
+                        verts.append((a[0]+dx*(center+along)+nx*offset,a[1]+dy*(center+along)+ny*offset,z0+floor*2.7+0.8+up+(0.09 if mi else 0)))
+                    faces.append(tuple(range(base,base+4))); indices.append(mi)
+    obj=new_mesh_object(f'facade_{osm_id}',verts,faces,col)
+    obj.data.materials.append(mats['Steel']);obj.data.materials.append(mats['WindowDark'])
+    for p,mi in zip(obj.data.polygons,indices):p.material_index=mi
+    obj['status']='ESTIMATED: generic openings, not measured facade'

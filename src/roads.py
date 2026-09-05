@@ -40,7 +40,7 @@ def _strip(points: List[Tuple[float, float, float]], width: float):
             b = a + 1
             c = i * 2 + 1
             d = i * 2
-            faces.append((a, d, c, b))
+            faces.append((a, b, c, d))
     return verts, faces
 
 
@@ -51,7 +51,7 @@ def build_roads(cfg: LocationConfig, osm: OsmData, crs: CRS, sampler: TerrainSam
     step = {0: 12.0, 1: 8.0, 2: 4.0}.get(cfg.lod, 8.0)
     for way in ways:
         hw = way.tags["highway"]
-        if hw in ("proposed", "construction", "platform", "corridor"):
+        if hw in ("proposed", "planned", "construction", "platform", "corridor", "abandoned"):
             continue
         pts2 = [crs.to_xy(lat, lon) for lat, lon in way.coords]
         sampled = sample_polyline(pts2, step)
@@ -60,13 +60,22 @@ def build_roads(cfg: LocationConfig, osm: OsmData, crs: CRS, sampler: TerrainSam
             z = sampler.height_at_xy(x, y) + 0.12
             draped.append((x, y, z))
         width = _width(hw)
+        width_source='ESTIMATED road class'
+        try:
+            reported=float(way.tags.get('width','').removesuffix('m').strip())
+            if math.isfinite(reported) and 0.3<=reported<=100:
+                width=reported;width_source='OSM width'
+        except ValueError:pass
         if cfg.lod == 0 and hw in ("footway", "path", "steps"):
             continue
         verts, faces = _strip(draped, width)
         if not verts:
             continue
         obj = new_mesh_object(f"road_{way.id}", verts, faces, col)
-        assign_material(obj, mats["Road"])
+        assign_material(obj, mats['Sand'] if way.tags.get('surface') in ('ground','dirt','sand','gravel') else mats['Road'])
+        obj['source']=f'https://www.openstreetmap.org/way/{way.id}'
+        obj['width_status']=width_source
+        obj['width_m']=width
         count += 1
     print(f"[roads] created={count} osm_highways={len(ways)}")
     return count

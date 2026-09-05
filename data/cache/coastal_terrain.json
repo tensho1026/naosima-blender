@@ -1,0 +1,16 @@
+{
+  "vertices": 197531,
+  "triangles": 382358,
+  "closed_coast_polygons": 36,
+  "unclosed_coast_chains": 4,
+  "main_island_area_m2": 7595977.717437137,
+  "source": "OSM coastline + GSI DEM; no surveyed coastal elevations",
+  "bbox": [
+    34.435,
+    133.962,
+    34.508,
+    134.02
+  ],
+  "dem_layer": "dem",
+  "dem_zoom": 14
+}

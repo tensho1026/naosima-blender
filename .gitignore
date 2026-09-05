@@ -7,3 +7,13 @@ output/*.blend
 output/previews/**
 !output/previews/.gitkeep
 assets/landmarks/*.blend
+
+data/aerial/
+output/refined_previews/
+output/*_audit.json
+output/*.log
+
+.venv-gis/
+data/cache/*.npz
+
+data/references/

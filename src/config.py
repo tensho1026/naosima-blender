@@ -55,6 +55,7 @@ class LocationConfig:
     max_trees: int = 7000
     max_rocks: int = 250
     max_buildings: int = 2500
+    aerial: bool = False
     lod: int = 1  # 0 overview, 1 district, 2 close
     districts: Dict[str, DistrictSpec] = field(default_factory=dict)
     landmarks: List[LandmarkSpec] = field(default_factory=list)
@@ -181,7 +182,7 @@ NAOSHIMA_DISTRICTS = {
         radius_m=320.0,
         style="museum",
         note="APPROXIMATE until OSM name match. Southern highland museum/hotel area.",
-        osm_name_hints=("ベネッセハウス", "Benesse House"),
+        osm_name_hints=("ベネッセハウス", "Benesse House Museum"),
     ),
     "chichu": DistrictSpec(
         name="Chichu Art Museum area",
@@ -207,8 +208,8 @@ NAOSHIMA_DISTRICTS = {
     "new_museum": DistrictSpec(
         name="Naoshima New Museum area",
         name_ja="直島新美術館周辺",
-        lat=34.4488,
-        lon=133.9920,
+        lat=34.4579024,
+        lon=133.9987355,
         radius_m=180.0,
         style="museum",
         note="APPROXIMATE until OSM name match. Opened as Naoshima New Museum of Art.",
@@ -223,7 +224,7 @@ NAOSHIMA_LANDMARKS = [
         name_ja="海の駅なおしま",
         lat=34.456972,
         lon=133.974083,
-        osm_name_hints=("海の駅", "Marine Station", "なおしま"),
+        osm_name_hints=("海の駅なおしま", "海の駅", "Marine Station Naoshima", "直島フェリーターミナル"),
         kind="approximate_building",
         note=(
             "Published: SANAA, ~70 m x ~52 m large thin roof, ~3600 m2, "
@@ -272,7 +273,7 @@ NAOSHIMA_LANDMARKS = [
         name_ja="ベネッセハウス",
         lat=None,
         lon=None,
-        osm_name_hints=("ベネッセハウス", "Benesse House"),
+        osm_name_hints=("ベネッセハウス", "Benesse House Museum"),
         kind="approximate_building",
         note="Ando hotel/museum on the southern highland. Approximate Landmark.",
         asset_filename="benesse_house.blend",
@@ -294,7 +295,7 @@ NAOSHIMA_LANDMARKS = [
         name_ja="赤かぼちゃ（位置のみ）",
         lat=34.4568,
         lon=133.9737,
-        osm_name_hints=("赤かぼちゃ", "Red Pumpkin", "南瓜"),
+        osm_name_hints=("赤かぼちゃ", "Red Pumpkin"),
         kind="placeholder_art",
         note="Artwork is NOT modeled. Landmark Placeholder only. Position APPROXIMATE near Miyanoura green.",
     ),

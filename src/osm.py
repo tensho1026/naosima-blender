@@ -35,10 +35,18 @@ class OsmNode:
 
 
 @dataclass
+class OsmRelation:
+    id: int
+    tags: Tags
+    members: List[dict]
+
+
+@dataclass
 class OsmData:
     nodes: Dict[int, OsmNode]
     ways: List[OsmWay]
     raw_path: str
+    relations: List[OsmRelation] = field(default_factory=list)
 
     def ways_with(self, key: str, values: Optional[Sequence[str]] = None) -> List[OsmWay]:
         out = []
@@ -56,7 +64,7 @@ class OsmData:
         hints_l = [h.lower() for h in hints]
         found = []
         for n in self.nodes.values():
-            blob = " ".join(n.tags.values()).lower()
+            blob = " ".join(n.tags.get(k, "") for k in ("name", "name:ja", "name:en", "alt_name")).lower()
             if any(h.lower() in blob for h in hints):
                 found.append(n)
         return found
@@ -64,8 +72,8 @@ class OsmData:
     def ways_named(self, hints: Sequence[str]) -> List[OsmWay]:
         found = []
         for w in self.ways:
-            blob = " ".join(w.tags.values())
-            if any(h in blob for h in hints):
+            blob = " ".join(w.tags.get(k, "") for k in ("name", "name:ja", "name:en", "alt_name"))
+            if any(h.casefold() in blob.casefold() for h in hints):
                 found.append(w)
         return found
 
@@ -133,6 +141,7 @@ def parse_osm_xml(xml_bytes: bytes, raw_path: str) -> OsmData:
     root = ET.fromstring(xml_bytes)
     nodes: Dict[int, OsmNode] = {}
     ways: List[OsmWay] = []
+    relations: List[OsmRelation] = []
     for el in root:
         tag = el.tag.split("}")[-1]
         if tag == "node":
@@ -143,6 +152,10 @@ def parse_osm_xml(xml_bytes: bytes, raw_path: str) -> OsmData:
                 lon=float(el.attrib["lon"]),
                 tags=tags,
             )
+        elif tag == 'relation':
+            tags={c.attrib['k']:c.attrib['v'] for c in el if c.tag.split('}')[-1]=='tag'}
+            members=[dict(type=c.attrib['type'],ref=int(c.attrib['ref']),role=c.attrib.get('role','')) for c in el if c.tag.split('}')[-1]=='member']
+            relations.append(OsmRelation(int(el.attrib['id']),tags,members))
         elif tag == "way":
             nds = [int(c.attrib["ref"]) for c in el if c.tag.split("}")[-1] == "nd"]
             tags = {c.attrib["k"]: c.attrib["v"] for c in el if c.tag.split("}")[-1] == "tag"}
@@ -159,7 +172,7 @@ def parse_osm_xml(xml_bytes: bytes, raw_path: str) -> OsmData:
         if ok:
             w.coords = coords
     print(f"[osm] XML nodes={len(nodes)} ways={len(ways)}")
-    return OsmData(nodes=nodes, ways=ways, raw_path=raw_path)
+    return OsmData(nodes=nodes, ways=ways, raw_path=raw_path, relations=relations)
 
 
 def load_or_fetch_osm(cfg: LocationConfig) -> OsmData:
@@ -188,6 +201,7 @@ def load_or_fetch_osm(cfg: LocationConfig) -> OsmData:
 def parse_osm(data: dict, raw_path: str) -> OsmData:
     nodes: Dict[int, OsmNode] = {}
     ways: List[OsmWay] = []
+    relations: List[OsmRelation] = []
     for el in data.get("elements", []):
         t = el.get("type")
         if t == "node":
@@ -206,8 +220,7 @@ def parse_osm(data: dict, raw_path: str) -> OsmData:
                 )
             )
         elif t == "relation":
-            # Flatten outer members that are already in ways; skip full multipolygon merge.
-            continue
+            relations.append(OsmRelation(el['id'],el.get('tags') or {},el.get('members') or []))
     for w in ways:
         coords = []
         ok = True
@@ -220,12 +233,13 @@ def parse_osm(data: dict, raw_path: str) -> OsmData:
         if ok:
             w.coords = coords
     print(f"[osm] nodes={len(nodes)} ways={len(ways)}")
-    return OsmData(nodes=nodes, ways=ways, raw_path=raw_path)
+    return OsmData(nodes=nodes, ways=ways, raw_path=raw_path, relations=relations)
 
 
 def way_centroid(way: OsmWay) -> Optional[Tuple[float, float]]:
     if not way.coords:
         return None
-    lat = sum(c[0] for c in way.coords) / len(way.coords)
-    lon = sum(c[1] for c in way.coords) / len(way.coords)
+    coords = way.coords[:-1] if way.coords[0] == way.coords[-1] else way.coords
+    lat = sum(c[0] for c in coords) / len(coords)
+    lon = sum(c[1] for c in coords) / len(coords)
     return lat, lon

@@ -34,7 +34,17 @@ def generate(cfg: LocationConfig, do_render: bool = False, blend_name: str = "na
     crs = CRS(cfg)
     sampler = TerrainSampler(dem, crs, sea_level=cfg.sea_level)
     mats = make_materials()
-    build_terrain(cfg, dem, crs, osm, mats, sampler)
+    terrain=build_terrain(cfg, dem, crs, osm, mats, sampler)
+    if cfg.aerial:
+        from .aerial import fetch_aerial,apply_aerial
+        from dataclasses import replace
+        fetch_aerial(cfg)
+        apply_aerial(terrain,crs,cfg)
+        if cfg.location_id=='naoshima':
+            for name,bbox in [('honmura_detail',(34.4565,133.9910,34.4640,134.0005)),('miyanoura_detail',(34.4520,133.9700,34.4600,133.9810))]:
+                detail=replace(cfg,location_id=name,bbox=bbox)
+                fetch_aerial(detail,zoom=18)
+                apply_aerial(terrain,crs,detail,overlay=True)
     build_ocean(cfg, crs, mats)
     build_coastline(cfg, dem, crs, osm, mats)
     build_buildings(cfg, osm, crs, sampler, mats)
@@ -43,6 +53,12 @@ def generate(cfg: LocationConfig, do_render: bool = False, blend_name: str = "na
     build_landmarks(cfg, osm, crs, sampler, mats)
     setup_lighting(cfg)
     setup_cameras(cfg, crs, sampler)
+    if cfg.aerial:
+        from .cameras import refine_review_cameras
+        refine_review_cameras(cfg,crs)
+    import bpy
+    bpy.context.scene['source']='国土地理院 / 地理院タイル; © OpenStreetMap contributors (ODbL)'
+    bpy.context.scene['fidelity']='GIS reconstruction; building dimensions and facades estimated where not mapped'
     out = save_blend(output_dir() / blend_name)
     if do_render:
         render_previews(cfg)

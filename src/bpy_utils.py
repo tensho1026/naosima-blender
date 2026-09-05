@@ -13,7 +13,8 @@ Vec3 = Tuple[float, float, float]
 
 
 def reset_scene() -> None:
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+    for obj in list(bpy.data.objects):
+        bpy.data.objects.remove(obj, do_unlink=True)
     scene = bpy.context.scene
     scene.unit_settings.system = "METRIC"
     scene.unit_settings.scale_length = 1.0

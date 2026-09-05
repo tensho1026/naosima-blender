@@ -13,7 +13,7 @@ from .config import LocationConfig
 def setup_lighting(cfg: LocationConfig):
     col = collection("Lighting")
     sun_data = bpy.data.lights.new("Sun", "SUN")
-    sun_data.energy = 7.5
+    sun_data.energy = 2.8
     sun_data.angle = math.radians(0.53)
     sun_data.color = (1.0, 0.97, 0.92)
     sun = bpy.data.objects.new("Sun", sun_data)
@@ -32,16 +32,16 @@ def setup_lighting(cfg: LocationConfig):
         sky.sky_type = "NISHITA"
     except Exception:
         pass
-    if "Sun Elevation" in sky.inputs:
-        sky.inputs["Sun Elevation"].default_value = math.radians(52.0)
-    if "Sun Rotation" in sky.inputs:
-        sky.inputs["Sun Rotation"].default_value = math.radians(200.0)
-    if "Air" in sky.inputs:
-        sky.inputs["Air"].default_value = 0.9
-    if "Dust" in sky.inputs:
-        sky.inputs["Dust"].default_value = 0.35
-    bg.inputs["Strength"].default_value = 0.85
-    nt.links.new(sky.outputs["Color"], bg.inputs["Color"])
+    sky.sun_elevation = math.radians(42.0)
+    sky.sun_rotation = math.radians(125.0)
+    sky.sun_disc = False
+    sky.air_density = 1.0
+    if hasattr(sky, 'dust_density'):
+        sky.dust_density = 0.5
+    bg.inputs["Strength"].default_value = 0.45
+    bg.inputs['Color'].default_value=(0.45,0.62,0.82,1)
+    bg.inputs['Strength'].default_value=0.6
+    sky.label='Optional physical sky: reconnect and calibrate for Blender version'
     nt.links.new(bg.outputs["Background"], out.inputs["Surface"])
-    print("[lighting] sun + Nishita sky")
+    print("[lighting] sun + calibrated ambient daylight")
     return sun

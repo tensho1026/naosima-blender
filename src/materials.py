@@ -70,13 +70,13 @@ def make_materials() -> Dict[str, bpy.types.Material]:
 
     nt, bsdf = new("TraditionalWall")
     # Honmura yakisugi / plaster: dark charred cedar brown (literature: 焼杉)
-    _set_color(bsdf, (0.22, 0.16, 0.12), roughness=0.82)
+    _set_color(bsdf, (0.055, 0.045, 0.035), roughness=0.82)
 
     nt, bsdf = new("ModernWall")
     _set_color(bsdf, (0.72, 0.71, 0.68), roughness=0.55)
 
     nt, bsdf = new("Roof")
-    _set_color(bsdf, (0.22, 0.10, 0.08), roughness=0.68)  # kawara-like
+    _set_color(bsdf, (0.095, 0.105, 0.12), roughness=0.48)  # kawara-like
 
     nt, bsdf = new("RoofModern")
     _set_color(bsdf, (0.18, 0.19, 0.21), roughness=0.45)
@@ -93,20 +93,21 @@ def make_materials() -> Dict[str, bpy.types.Material]:
     _noise_bump(nt, bsdf, scale=14.0, strength=0.22)
 
     nt, bsdf = new("Water")
-    _set_color(bsdf, (0.05, 0.12, 0.16), roughness=0.06, specular=0.7)
+    _set_color(bsdf, (0.018, 0.055, 0.073), roughness=0.24, specular=0.7)
     if "Transmission Weight" in bsdf.inputs:
-        bsdf.inputs["Transmission Weight"].default_value = 0.85
+        bsdf.inputs["Transmission Weight"].default_value = 0.1
     elif "Transmission" in bsdf.inputs:
-        bsdf.inputs["Transmission"].default_value = 0.85
+        bsdf.inputs["Transmission"].default_value = 0.1
     if "IOR" in bsdf.inputs:
         bsdf.inputs["IOR"].default_value = 1.333
     if "Alpha" in bsdf.inputs:
-        bsdf.inputs["Alpha"].default_value = 0.92
-    mats["Water"].use_screen_refraction = True
+        bsdf.inputs["Alpha"].default_value = 1.0
+    if hasattr(mats["Water"], "use_screen_refraction"):
+        mats["Water"].use_screen_refraction = True
     _noise_bump(nt, bsdf, scale=40.0, strength=0.04)
 
     nt, bsdf = new("Foliage")
-    _set_color(bsdf, (0.12, 0.28, 0.08), roughness=0.85)
+    _set_color(bsdf, (0.035, 0.085, 0.018), roughness=0.85)
 
     nt, bsdf = new("Trunk")
     _set_color(bsdf, (0.18, 0.10, 0.06), roughness=0.9)
@@ -117,7 +118,8 @@ def make_materials() -> Dict[str, bpy.types.Material]:
         bsdf.inputs["Transmission Weight"].default_value = 0.9
     if "Alpha" in bsdf.inputs:
         bsdf.inputs["Alpha"].default_value = 0.35
-    mats["Glass"].blend_method = "BLEND"
+    if hasattr(mats["Glass"], "blend_method"):
+        mats["Glass"].blend_method = "BLEND"
 
     nt, bsdf = new("Steel")
     _set_color(bsdf, (0.55, 0.56, 0.58), roughness=0.35, metallic=0.85)
@@ -125,4 +127,21 @@ def make_materials() -> Dict[str, bpy.types.Material]:
     nt, bsdf = new("Placeholder")
     _set_color(bsdf, (0.85, 0.15, 0.15), roughness=0.4)
 
+    nt, bsdf = new("BlackPlaster")
+    _set_color(bsdf,(0.025,0.027,0.029),roughness=0.87)
+    _noise_bump(nt,bsdf,scale=35.0,strength=0.03)
+    nt, bsdf = new("WindowDark")
+    _set_color(bsdf, (0.035, 0.065, 0.075), roughness=0.23, metallic=0.25)
+    # Coordinates in metres prevent a whole facade being treated as one board.
+    for name in ('TraditionalWall','Concrete','Roof','RoofModern','ModernWall'):
+        mat=mats[name]; nt=mat.node_tree
+        bsdf=next(n for n in nt.nodes if n.type=='BSDF_PRINCIPLED')
+        tex=nt.nodes.new('ShaderNodeTexNoise')
+        tex.inputs['Scale'].default_value=7.0 if name!='TraditionalWall' else 25.0
+        tex.inputs['Detail'].default_value=3
+        coord=nt.nodes.new('ShaderNodeTexCoord')
+        nt.links.new(coord.outputs['Object'],tex.inputs['Vector'])
+        bump=nt.nodes.new('ShaderNodeBump');bump.inputs['Strength'].default_value=0.18
+        bump.inputs['Distance'].default_value=0.012
+        nt.links.new(tex.outputs['Fac'],bump.inputs['Height']);nt.links.new(bump.outputs['Normal'],bsdf.inputs['Normal'])
     return mats

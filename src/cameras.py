@@ -44,3 +44,27 @@ def setup_cameras(cfg: LocationConfig, crs: CRS, sampler: TerrainSampler):
     if cameras:
         bpy.context.scene.camera = cameras[0]
     return cameras
+
+
+def refine_review_cameras(cfg,crs):
+    """Frame the island and Honmura settlement, independently of port markers."""
+    if cfg.location_id!='naoshima':return
+    cam=bpy.data.objects['Camera_Overview']
+    target=Vector((0,350,0));cam.location=(3300,-5100,5800)
+    cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler()
+    cam.data.type='ORTHO';cam.data.ortho_scale=6400
+    cam=bpy.data.objects['Camera_Honmura']
+    x,y=crs.to_xy(34.4593,133.9960);target=Vector((x,y,15))
+    cam.location=target+Vector((210,-280,145))
+    cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=38
+
+    museum=bpy.data.objects.get('bldg_1465161307')
+    if museum:
+        pts=[museum.matrix_world@v.co for v in museum.data.vertices]
+        target=Vector(((min(p.x for p in pts)+max(p.x for p in pts))/2,(min(p.y for p in pts)+max(p.y for p in pts))/2,(min(p.z for p in pts)+max(p.z for p in pts))/2))
+        cam=bpy.data.objects.get('Camera_NewMuseum')
+        if cam is None:
+            cam=bpy.data.objects.new('Camera_NewMuseum',bpy.data.cameras.new('Camera_NewMuseum'))
+            link_object(cam,collection('Cameras'))
+        cam.location=target+Vector((-100,-100,85));cam.data.lens=44;cam.data.clip_end=20000
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler()

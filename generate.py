@@ -34,6 +34,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate Naoshima in Blender from GSI DEM + OSM")
     parser.add_argument("--render-previews", action="store_true", help="Render preview cameras to output/previews/")
     parser.add_argument("--lod", type=int, default=None, choices=(0, 1, 2), help="0 overview, 1 default, 2 denser")
+    parser.add_argument("--refined", action="store_true", help="Full DEM, GSI aerial textures, denser vegetation and review cameras")
     parser.add_argument("--skip-osm", action="store_true", help="(unused placeholder)")
     args = parser.parse_args(_blender_argv(sys.argv))
 
@@ -49,7 +50,9 @@ def main() -> None:
         elif args.lod == 2:
             cfg.max_trees = 10000
             cfg.dem_zoom = 14
-    generate(cfg, do_render=args.render_previews)
+    if args.refined:
+        cfg.aerial=True;cfg.lod=2;cfg.max_trees=45000;cfg.tree_density=0.012
+    generate(cfg, do_render=args.render_previews,blend_name='naoshima_refined.blend' if args.refined else 'naoshima.blend')
 
 
 if __name__ == "__main__":

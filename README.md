@@ -1,211 +1,68 @@
 # Naoshima Blender Generator
 
-香川県・直島の **実在する地理データ** から、Blender 3D シーンを自動生成するツールです。
+直島の国土地理院DEM・航空写真とOpenStreetMapからBlenderシーンを生成します。
+**現状は地理データに基づく再構成であり、全建物の実測による完全再現ではありません。**
 
-手作業のモデリングではなく、次で島全体（地形・海岸・海・OSM建物・道路・森林・簡易ランドマーク）を組み立てます。
+## 改善版の生成
 
-```bash
-blender --background --python generate.py
-# または
-./generate-naoshima.sh
+Blender 5.2.0 LTSで生成・レンダリングを確認しています。Blender MCPからシーンの確認・コード実行・読み込みができます。シーンを初期化するときもアドオンの設定をリセットしません。
+
+```sh
+# 任意: 正確な海岸輪郭のメッシュを前処理する（初回のみ）
+python3 -m venv .venv-gis
+.venv-gis/bin/python -m pip install -r requirements-gis.txt
+.venv-gis/bin/python scripts/prepare_coastal_terrain.py
+
+# 改善版。初回の航空写真取得はネット接続が必要
+/Applications/Blender.app/Contents/MacOS/Blender --background --python generate.py -- --refined
+
+# 保存した改善版の4視点をレンダリング
+/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/render_review.py
 ```
 
-成果物: `output/naoshima.blend`
+BlenderがPATHにあればアプリの絶対パスを`blender`に置き換えられます。通常の軽量版は`blender --background --python generate.py -- --lod 1`です。
 
-## プロジェクト概要
+## 保存先
 
-- 対象: 直島本島（宮浦・宮浦港・本村・積浦・琴弾地・ベネッセハウス周辺・地中美術館周辺・李禹煥美術館周辺・直島新美術館周辺・海岸・山林を Empty / 地区半径で識別）
-- 将来: `generate_location.py --lat --lon --radius` で豊島・男木島・女木島などへ流用できる座標設定
-- 方針: 想像で島の形や街を作らない。取れない情報は `UNKNOWN` / 推定と明記する
+- `output/naoshima.blend`: 既存の生成物。改善作業では保持
+- `output/naoshima_refined.blend`: 改善版。航空写真を内包
+- `output/refined_previews/`: 全景・宮浦・本村・新美術館の確認画像
+- `output/building_audit.json`: 建物ID・高さの根拠・屋根の推定状態
+- `output/validation_audit.json`: Blender内の検証結果
+- `RECONSTRUCTION_STATUS.md`: 再現範囲と未解決事項
 
-## 使用データ / データ取得元
+## 改善内容
 
-| 種類 | 取得元 | 利用方法 |
-|------|--------|----------|
-| 標高 DEM | 国土地理院 標高タイル（`dem`、ズーム14、約10 m） | `https://cyberjapandata.gsi.go.jp/xyz/dem/{z}/{x}/{y}.txt` |
-| 海岸・水面 | DEM の無効値（海）+ OSM `natural=coastline` | 地形メッシュの陸域マスク |
-| 建物・道路・土地利用・森林 | OpenStreetMap Overpass API | 建物ポリゴン押し出し、道路ストリップ、森林範囲 |
-| 地区・港の座標 | 公開地名資料 + OSM 名称マッチ | 宮浦港・本村港は公開ガゼット、李禹煥美術館は公開 POI。その他は OSM 優先、なければ APPROXIMATE |
-| 海の駅なおしま寸法 | 直島町公式（大屋根 約70×52 m） | Approximate Landmark の根拠。BIM ではない |
-| 景観ルール | 直島町・香川県観光・ベネッセアートサイト等の **公開文章** | 本村=焼杉・瓦・城下町の細い街路。宮浦=港・SANAA の大屋根・比較的新しい建物。写真ファイルはリポジトリに保存しない |
+- OSMの建物外形を保持し、閉じた切妻屋根・基礎・近景用の窓を生成。窓配置は実測ではなく推定
+- 高さを地区別に勝手に増減しない。地上階数0の地中美術館を地上に押し出さない
+- 海の駅はOSM way 75615686の屋根輪郭を使用。汎用建物との二重生成を防止
+- 新美術館の地区位置を本村のOSM POIで補正。公式写真に基づく勾配屋根・黒漆喰を反映（寸法は推定）。部分一致でチケットセンター等を本館にしない
+- 中庭付きのOSM multipolygon建物を、中庭を塞がずに生成
+- 全国最新写真（シームレス）z16を島全体、z18を宮浦・本村に地理参照付きで適用
+- OSMの接続する海岸線を結合してDEMをクリップ。前処理キャッシュがない場合はDEM格子の輪郭へフォールバック
+- 森林ポリゴン内に密度に基づく樹木を配置。岩と木のインスタンス候補を分離
+- 計画道路・海上の国道30号を除外。道路の上向き法線を修正し、OSM道路幅があれば優先
+- アート作品の未制作形状を赤い箱として表示せず、編集用の位置マーカーで保持
 
-仕様: [標高タイルの詳細仕様](https://cyberjapandata.gsi.go.jp/development/demtile.html)
+## 出典
 
-地理院タイルの利用は出典明示（国土地理院 / 地理院タイル）で申請不要、との案内に従っています。  
-OSM は [ODbL](https://www.openstreetmap.org/copyright) です。
+- 地形・航空写真: **国土地理院 / 地理院タイル** — https://maps.gsi.go.jp/development/ichiran.html
+- 標高タイル仕様: https://cyberjapandata.gsi.go.jp/development/demtile.html
+- 建物・道路・海岸・土地利用: **© OpenStreetMap contributors (ODbL)** — https://www.openstreetmap.org/copyright
+- 海の駅の公表屋根寸法: https://www.town.naoshima.lg.jp/about/shisetsu/seastation.html
+- 直島新美術館の立地・外観説明: https://benesse-artsite.jp/nnmoa/art/
 
-## Blender バージョン
+航空写真は複数年代の撮影画像を組み合わせたものです。「最新」というレイヤ名は、2026年現在の全建物と一致することを意味しません。撮影時期は個別確認未了です。外観の写真とOSM外形の更新時期が異なる部分があります。
 
-開発・CLI 確認: **Blender 4.5.13 LTS**（`bpy` 4.5）。  
-4.2 系でも動く想定ですが、Geometry Nodes のソケット名は 4.5 で確認しています。
+## キャッシュ
 
-```bash
-blender --version
+`data/dem/`、`data/osm/`は既存地理データです。`data/aerial/`は写真・地理参照メタデータ、`data/cache/coastal_terrain.npz`は海岸クリップ済みメッシュです。OSM・DEMを変更した場合は海岸前処理を再実行してください。Shapelyは前処理専用で、Blender内での生成には不要です。
+
+## 検証
+
+```sh
+python3 -m unittest discover -s tests -v
+blender --background --python tests/validate_blender_scene.py
 ```
 
-## セットアップ
-
-1. [Blender 4.5 LTS](https://www.blender.org/download/) をインストールし、`blender` が PATH にあること
-2. 追加 pip パッケージは **不要**（標準ライブラリ + Blender 同梱の numpy）
-3. 初回は DEM タイルと Overpass のためネット接続が必要
-
-```bash
-chmod +x generate-naoshima.sh render-preview.sh
-```
-
-Mac: Blender アプリのバイナリを使う例
-
-```bash
-export BLENDER="/Applications/Blender.app/Contents/MacOS/Blender"
-./generate-naoshima.sh
-```
-
-## 実行方法
-
-```bash
-blender --background --python generate.py
-./generate-naoshima.sh
-./generate-naoshima.sh --lod 0          # 軽いプレビュー
-./generate-naoshima.sh --render-previews
-./render-preview.sh
-```
-
-他地域（実験）:
-
-```bash
-blender --background --python generate_location.py -- --lat 34.48 --lon 134.08 --radius 3000 --id teshima
-```
-
-## DEM 取得方法
-
-1. `src/config.py` の `NAOSHIMA_BBOX`（南, 西, 北, 東）から Web メルカトルタイル番号を計算
-2. 国土地理院 `dem` レイヤのテキスト標高タイルをダウンロード
-3. `data/dem/naoshima/dem/14/{x}_{y}.txt` にキャッシュ
-4. 無効値 `e` は海 / 欠測（NaN）。陸域だけメッシュ化
-5. 水平・鉛直とも 1 Blender 単位 = 1 m（`TERRAIN_SCALE`）
-6. LOD 0/1 では間引き。より細かい 5 m は `dem_layer="dem5a"` と `dem_zoom=15`（重い）
-
-手動でタイルを置き換えても、同じファイル名なら再ダウンロードしません。
-
-## OSM 取得方法
-
-Overpass クエリ（建物・道路・landuse・natural・leisure・名称ノード等）を bbox で実行し、
-
-```text
-data/osm/naoshima.osm.json
-```
-
-に保存します（Overpass の JSON。拡張子はキャッシュ用）。  
-ミラー: `overpass-api.de` → 失敗時 `overpass.kumi.systems`
-
-キャッシュがあれば API は叩きません。更新するときはそのファイルを削除してください。
-
-## 自動生成フロー
-
-1. 空シーン
-2. GSI DEM → Terrain
-3. 海面 Plane + Water マテリアル
-4. OSM / DEM 海岸
-5. OSM building をポリゴン押し出し。高さは `height` / `building:levels`、無ければ推定
-6. OSM highway を地形に沿った帯メッシュ。幅は道路種別の推定値
-7. forest/wood 範囲に点をばらまき、Geometry Nodes で低ポリ木をインスタンス
-8. 地区ルール（本村 / 宮浦 / その他）で壁・屋根マテリアル
-9. ランドマーク: `assets/landmarks/{key}.blend` があれば置換、なければ Approximate Landmark またはアートの Placeholder
-10. Sun + Nishita Sky、確認用カメラ
-11. `output/naoshima.blend` 保存。`--render-previews` で PNG
-
-## キャッシュについて
-
-| パス | 内容 |
-|------|------|
-| `data/dem/` | GSI 標高タイル |
-| `data/osm/` | Overpass JSON |
-| `data/cache/` | 予備 |
-| `output/` | `.blend` とプレビュー（git 対象外） |
-
-## 生成物
-
-- `output/naoshima.blend`
-- `output/previews/overview.png` ほか（レンダー時）
-- コレクション: Terrain, Ocean, Coastline, Buildings, Roads, Vegetation, Landmarks, DistrictMarkers, Cameras, Lighting, TreeAssets
-
-## LOD
-
-| LOD | 用途 |
-|-----|------|
-| 0 | 島全体。地形間引き大、歩道省略、木を抑制 |
-| 1 | 既定。地区表示向け |
-| 2 | 近距離。点群・道路サンプルを密に（窓メッシュは作らない） |
-
-遠景の住宅に窓枠などの細かいメッシュは生成しません。
-
-## 実データ部分
-
-- 島の標高フィールド（GSI）
-- OSM の建物外形・道路中心線・土地利用・自然・海岸ウェイ（ある範囲）
-- OSM / 公開資料で取れた施設の位置
-- 海の駅の屋根の公表おおよその平面寸法（70×52 m）
-
-## 推定している部分 / UNKNOWN
-
-- **建物高さ**: OSM に height / levels が無い場合、用途別階数 × 3 m または既定 6 m（`src/config.py`）
-- **道路幅**: 日本の島しょ部の典型値。OSM `width=*` はほぼ未使用
-- **本村の切妻屋根**: 景観文献に基づくスタイル推定。個別家屋の実測ではない
-- **積浦・琴弾地・ベネッセ・地中・新美術館の中心**: 公開住所・OSM 名称で補正。失敗時は APPROXIMATE。取れなければログに UNKNOWN
-- **地中美術館**: 大半が地下（ベネッセ公式）。地上は低いコンクリートの Approximate Landmark のみ。内部形状 UNKNOWN
-- **安藤・SANAA 建築の正確な 3D**: 公開図面がないため精密モデルは作らない
-- **森林が OSM に無いセル**: 標高フォールバック（ログに明示）
-- **岩の配置**: 急傾斜の DEM 上のランダム。地質図ではない
-- **アート作品**: 赤かぼちゃ等は **位置マーカーのみ**。形状はコピーしない
-- **写真テクスチャ**: 著作権のある画像は保存・再配布しない。マテリアルはプロシージャル
-
-## 地域別景観（文献ベースのルール）
-
-公開情報の要約（AI の「直島風」想像ではない）:
-
-- **本村**: 城下町由来の街区、江戸期民家が残る、焼杉板の外壁が多い、瓦屋根、細い道、塀のある屋敷（ベネッセ教育情報の本村記事、香川県観光の集落説明）
-- **宮浦**: 島の玄関・宮浦港。海の駅なおしまは SANAA、薄い大きな鉄板屋根とガラスの箱（直島町公式）。港湾・店舗・比較的新しい住宅が混在
-- **積浦**: 漁港集落（町・プレスキット）。観光拠点より生活・漁港側
-- **琴弾地**: ベネッセハウス住所。南の海岸・美術館エリア
-- **その他**: OSM のまま + 現代壁/屋根
-
-## ランドマークとアセット差し替え
-
-`assets/landmarks/` に次のファイル名で `.blend` を置くと、Approximate の代わりに append します。
-
-- `marine_station.blend`
-- `chichu.blend`
-- `lee_ufan.blend`
-- `benesse_house.blend`
-- `new_museum.blend`
-
-## 著作権・ライセンス上の注意
-
-- 国土地理院タイル: 出典を明記して利用。成果の再配布時も出典を残すこと
-- OpenStreetMap: ODbL。派生データベースとしての表示が必要な場合あり
-- 草間彌生作品・安藤建築・SANAA 建築などの **著作物を精密に複製しない**
-- 観光写真をプロジェクトへコピーしない
-- 本リポジトリの **コード** は生成ツールであり、直島の公式 3D ではありません
-
-## 既知の制限
-
-- Overpass / 地理院サーバの一時障害で初回取得が失敗することがある（キャッシュ後はオフライン可）
-- OSM の欠落・古さはそのままシーンに出る
-- 北の製錬所エリアは OSM industrial 次第で簡略
-- Geometry Nodes の木は低ポリ 3 種。樹種の現地同定はしていない
-- CPU Cycles のプレビューはサンプル数が少なくノイズが残る
-- MacBook 向けにメッシュを間引いているため、登山道スケールの微地形は出ない
-- `read_factory_settings` でアドオン状態はリセットされる
-
-## 今後の改善案
-
-- `dem5a` ズーム15 と島マスクのポリゴンクリップ
-- OSM の `width` / `roof:shape` / `building:material` の本格反映
-- 本村の塀・石垣を landuse から生成
-- 手作りランドマーク blend の公式公開モデル（許可がある場合のみ）
-- EEVEE Next 用の軽量プレビュー
-- 豊島・男木島プリセット
-
-## プロジェクト構成
-
-`src/config.py` に `NAOSHIMA_CENTER_LAT` / `LON` / `BOUNDING_BOX` / `SEA_LEVEL` / `TERRAIN_SCALE` / `TREE_DENSITY` を集約しています。
+統合検証は現在の直島OSMキャッシュを対象とし、建物数・地下建築の除外・海の駅の重複排除・高さ保持・道路法線・樹木/岩の分離・写真のUV座標・画像内包を確認します。実景との一致を証明するテストではありません。
