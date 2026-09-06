@@ -9,7 +9,9 @@ from src.aerial import tile_xy
 bpy.ops.wm.open_mainfile(filepath=str(ROOT/'output/naoshima_refined.blend'))
 scene=bpy.context.scene
 buildings=[o for o in bpy.data.objects if o.name.startswith('bldg_')]
-assert len(buildings)==1544,len(buildings)
+assert len(buildings)==1543,len(buildings)
+assert 'bldg_1362137190' not in bpy.data.objects,'Duplicate bath envelope'
+assert 'Individual_NaoshimaBath_1362137190' in bpy.data.objects
 assert 'bldg_1361954806' not in bpy.data.objects,'Duplicate Art Island Center envelope'
 assert 'Individual_ArtIslandCenter_1361954806' in bpy.data.objects
 assert 'bldg_1361901029' not in bpy.data.objects,'Duplicate NaoPAM envelope'
@@ -19,9 +21,25 @@ assert 'bldg_1307364185' not in bpy.data.objects
 ferry=bpy.data.objects['Ferry_Naoshima_2015']
 # At the berth the hull must stay over water; do not infer this from its origin.
 from mathutils import Vector
+camera=bpy.data.objects['Camera_NaoshimaBath']
+direction=camera.rotation_euler.to_quaternion()@Vector((0,0,-1))
+hit=scene.ray_cast(bpy.context.evaluated_depsgraph_get(),camera.location,direction)
+assert hit[0] and hit[4].name.startswith('Individual_NaoshimaBath_'), 'Bath review camera obscured by neighbouring building'
 from mathutils.bvhtree import BVHTree
+assert 'Placeholder_yellow_pumpkin' not in bpy.data.objects
+yellow=bpy.data.objects['YellowPumpkin_Exterior']
+pier=bpy.data.objects['YellowPumpkin_Pier_OSM_231864310']
+pier_bvh=BVHTree.FromObject(pier,bpy.context.evaluated_depsgraph_get())
+hit=pier_bvh.ray_cast(Vector((yellow.location.x,yellow.location.y,10)),Vector((0,0,-1)))[0]
+assert hit is not None and abs(hit.z-yellow.location.z)<.005,'Yellow pumpkin not seated on the mapped pier'
 coast=bpy.data.objects['Terrain']
 bvh=BVHTree.FromObject(coast,bpy.context.evaluated_depsgraph_get())
+pavilion=bpy.data.objects['NaoshimaPavilion_Exterior']
+for dx in (-3.6,-1.8,0,1.8,3.6):
+    for dy in (-3.3,-1.65,0,1.65,3.3):
+        ground=bvh.ray_cast(Vector((pavilion.location.x+dx,pavilion.location.y+dy,100)),Vector((0,0,-1)))[0]
+        assert ground is not None and abs(ground.z-(pavilion.location.z-.12))<.015, 'Pavilion ground did not follow local grading'
+assert all(p.normal.z>0 for p in bpy.data.objects['NaoshimaPavilion_Exterior_Site_Gravel'].data.polygons), 'Inverted gravel mound'
 for x in range(-33,34,3):
     for y in range(-6,7,2):
         point=ferry.matrix_world @ Vector((x,y,100))
@@ -61,6 +79,19 @@ from src.osm import load_or_fetch_osm
 from src.coordinates import point_in_ring
 forest=bpy.data.objects['ForestPoints']
 assert forest.modifiers.get('ForestGN') and forest.modifiers['ForestGN'].node_group
+for name in ('TreePrototypes','RockPrototypes'):
+    assert all(not o.hide_viewport for o in bpy.data.collections[name].objects), 'Prototype disabled in viewport dependency graph'
+for obj in scene.objects:
+    if obj.type not in {'MESH','CURVE','FONT'} or obj.hide_render:
+        continue
+    if obj.name in {'ForestPoints','RockPoints'}:
+        continue  # Point carriers use the materials on their instanced geometry.
+    used = {p.material_index for p in obj.data.polygons} if obj.type == 'MESH' else {0}
+    assert all(i<len(obj.data.materials) and obj.data.materials[i] is not None for i in used), ('Missing surface material',obj.name)
+for name in ('Water','Foliage','Ferry_Red','Ferry_Deck'):
+    mat=bpy.data.materials[name]
+    shader=next(n for n in mat.node_tree.nodes if n.type=='BSDF_PRINCIPLED')
+    assert all(abs(a-b)<1e-6 for a,b in zip(mat.diffuse_color,shader.inputs['Base Color'].default_value)), ('Solid colour differs from authored colour',name)
 regions=_forest_regions(load_or_fetch_osm(naoshima_config()),crs)
 assert {'OSM relation/10643315','OSM relation/18742522','OSM relation/18870504'} <= {s for _,_,s in regions}
 for outer,holes,source in regions:
@@ -89,7 +120,7 @@ for obj in buildings:
             x,y=crs.to_xy(lat,lon)
             actual=obj.matrix_world@obj.data.vertices[obj.data.loops[li].vertex_index].co
             assert math.hypot(actual.x-x,actual.y-y)<.01,('Roof image misregistered',obj.name)
-assert roof_count==516,roof_count
+assert roof_count==515,roof_count
 uv=terrain.data.uv_layers['GSI_WebMercator']
 metas=[json.loads((ROOT/'data/aerial'/name/'metadata.json').read_text()) for name in ('naoshima','honmura_detail','miyanoura_detail')]
 for pi in range(0,len(terrain.data.polygons),997):
@@ -105,6 +136,6 @@ for mat in terrain.data.materials:
     assert len(images)==1 and images[0].packed_file,'Unpacked aerial texture'
 for road in bpy.data.collections['Roads'].objects:
     assert all(p.normal.z>0 for p in road.data.polygons),'Inverted road normals'
-report=dict(buildings=len(buildings),individual_buildings=3,ferry_berth='water clearance checked',courtyard_buildings=1,marine_station=1,roads=len(bpy.data.collections['Roads'].objects),trees=len(bpy.data.objects['ForestPoints'].data.vertices),terrain_vertices=len(terrain.data.vertices),terrain_faces=len(terrain.data.polygons),packed_aerial_maps=len(terrain.data.materials),status='PASS')
+report=dict(buildings=len(buildings),individual_buildings=4,ferry_berth='water clearance checked',courtyard_buildings=1,marine_station=1,roads=len(bpy.data.collections['Roads'].objects),trees=len(bpy.data.objects['ForestPoints'].data.vertices),terrain_vertices=len(terrain.data.vertices),terrain_faces=len(terrain.data.polygons),packed_aerial_maps=len(terrain.data.materials),status='PASS')
 (ROOT/'output/validation_audit.json').write_text(json.dumps(report,indent=2))
 print('VALIDATION_PASS',report,flush=True)

@@ -3069,19 +3069,24 @@
     },
     {
       "osm_way_id": 1362137190,
-      "exterior_status": "unverified",
-      "reference_urls": [],
-      "observed": {},
+      "exterior_status": "front_photo_model_in_progress",
+      "reference_urls": [
+        "https://benesse-artsite.jp/art/naoshimasento.html",
+        "https://www.okayama-japan.jp/tw/spot/220"
+      ],
+      "observed": {
+        "front": "green double door, multicolour tiles, white canopy, asymmetric columns and palms",
+        "upper_room": "ochre block offset left, two horizontal sash windows"
+      },
       "unknown": [
-        "height",
-        "roof_geometry",
-        "wall_materials",
-        "front_openings",
+        "exact_dimensions",
+        "tile_motifs_and_layout",
+        "roof_assemblage_details",
         "side_openings",
         "rear_openings",
-        "boundary_details"
+        "ground_levels"
       ],
-      "name": "",
+      "name": "直島銭湯「I♥湯」",
       "centroid_latlon": [
         34.458040075,
         133.975162975

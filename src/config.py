@@ -301,13 +301,13 @@ NAOSHIMA_LANDMARKS = [
     ),
     LandmarkSpec(
         key="yellow_pumpkin",
-        name="Yellow Pumpkin (placeholder)",
-        name_ja="南瓜（位置のみ）",
+        name="Yellow Pumpkin",
+        name_ja="南瓜",
         lat=None,
         lon=None,
         osm_name_hints=("南瓜", "Yellow Pumpkin", "Pumpkin"),
         kind="placeholder_art",
-        note="Artwork is NOT modeled. Placeholder only if OSM node exists.",
+        note="Photo-based exterior study in refined mode; dot layout and precise geometry remain estimated.",
     ),
 ]
 

@@ -6,7 +6,7 @@ from .bpy_utils import collection,link_object
 from .coordinates import drop_closing
 from .mesh_batch import Parts
 
-INDIVIDUAL_BUILDINGS={1361954806:'art_island_center',1361901029:'naopam',1307364185:'seven_eleven'}
+INDIVIDUAL_BUILDINGS={1361954806:'art_island_center',1361901029:'naopam',1307364185:'seven_eleven',1362137190:'naoshima_bath'}
 
 def _material(name,color,roughness=.7):
     m=bpy.data.materials.get(name) or bpy.data.materials.new(name);m.use_nodes=True
@@ -236,4 +236,7 @@ def build_individual_buildings(cfg,osm,crs,sampler):
         elif way.id==1307364185:
             from .seven_eleven import build_seven_eleven
             roots.append(build_seven_eleven(way,crs,sampler))
+        elif way.id==1362137190:
+            from .naoshima_bath import build_naoshima_bath
+            roots.append(build_naoshima_bath(way,crs,sampler))
     return roots

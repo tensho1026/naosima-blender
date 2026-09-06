@@ -48,6 +48,13 @@ def main():
                 observed={'front':'left brown brick pier; right-side entry; frosted lower glazing; red post box',
                           'reference_date':'2024-12-18 after relocation'},
                 unknown=['exact_dimensions','rear','roof_equipment','fine_signage','parking_extent'])
+        if way.id==1362137190:
+            row.update(name='直島銭湯「I♥湯」',exterior_status='front_photo_model_in_progress',reference_urls=[
+                'https://benesse-artsite.jp/art/naoshimasento.html',
+                'https://www.okayama-japan.jp/tw/spot/220'],
+                observed={'front':'green double door, multicolour tiles, white canopy, asymmetric columns and palms',
+                          'upper_room':'ochre block offset left, two horizontal sash windows'},
+                unknown=['exact_dimensions','tile_motifs_and_layout','roof_assemblage_details','side_openings','rear_openings','ground_levels'])
         rows.append(row)
     rows.sort(key=lambda r:r['osm_way_id'])
     document={'scope':'Miyanoura working research envelope; not an exhaustive real-world building census',

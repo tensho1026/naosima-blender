@@ -157,6 +157,12 @@ def build_landmarks(
             art['position_source']=src
             placed += 1
             continue
+        if spec.key == 'yellow_pumpkin' and cfg.aerial:
+            from .yellow_pumpkin import build_yellow_pumpkin
+            art=build_yellow_pumpkin(x,y,osm,crs)
+            art['position_source']=src
+            placed += 1
+            continue
         if spec.kind == "placeholder_art":
             _placeholder_art(f"Placeholder_{spec.key}", x, y, z, mats, col)
             placed += 1

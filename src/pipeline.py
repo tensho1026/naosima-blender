@@ -60,6 +60,11 @@ def generate(cfg: LocationConfig, do_render: bool = False, blend_name: str = "na
     if cfg.aerial:
         from .ferry import build_ferry
         build_ferry(cfg,crs)
+        if cfg.location_id=='naoshima':
+            from .harbour_lawn import build_harbour_lawn
+            build_harbour_lawn(crs)
+            from .pavilion import build_pavilion
+            build_pavilion(crs)
     setup_lighting(cfg)
     setup_cameras(cfg, crs, sampler)
     if cfg.aerial:
@@ -68,6 +73,8 @@ def generate(cfg: LocationConfig, do_render: bool = False, blend_name: str = "na
     import bpy
     bpy.context.scene['source']='国土地理院 / 地理院タイル; © OpenStreetMap contributors (ODbL)'
     bpy.context.scene['fidelity']='GIS reconstruction; building dimensions and facades estimated where not mapped'
+    from .viewport import setup_colour_view
+    setup_colour_view()
     out = save_blend(output_dir() / blend_name)
     if do_render:
         render_previews(cfg)

@@ -106,8 +106,27 @@ def refine_review_cameras(cfg,crs):
         cam.location=store.matrix_world@Vector((26,19,8));target=store.matrix_world@Vector((7,-1,1.5))
         cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=45;cam.data.clip_end=20000
 
+    bath=bpy.data.objects.get('Individual_NaoshimaBath_1362137190')
+    if bath:
+        bpy.context.view_layer.update()
+        cam=bpy.data.objects.new('Camera_NaoshimaBath',bpy.data.cameras.new('Camera_NaoshimaBath'));link_object(cam,collection('Cameras'))
+        cam.location=bath.matrix_world@Vector((0,-3.8,2.8));target=bath.matrix_world@Vector((0,1,4.0))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=10;cam.data.clip_end=20000
+
     pumpkin=bpy.data.objects.get('RedPumpkin_Exterior')
     if pumpkin:
         cam=bpy.data.objects.new('Camera_RedPumpkin',bpy.data.cameras.new('Camera_RedPumpkin'));link_object(cam,collection('Cameras'))
         cam.location=Vector(pumpkin.location)+Vector((10,-13,5.5));target=Vector(pumpkin.location)+Vector((0,0,1.8))
         cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=48;cam.data.clip_end=20000
+
+    yellow=bpy.data.objects.get('YellowPumpkin_Exterior')
+    if yellow:
+        cam=bpy.data.objects.new('Camera_YellowPumpkin',bpy.data.cameras.new('Camera_YellowPumpkin'));link_object(cam,collection('Cameras'))
+        cam.location=Vector(yellow.location)+Vector((1,7,1.25));target=Vector(yellow.location)+Vector((0,0,1.0))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=38;cam.data.clip_end=30000
+
+    pavilion=bpy.data.objects.get('NaoshimaPavilion_Exterior')
+    if pavilion:
+        cam=bpy.data.objects.new('Camera_Pavilion',bpy.data.cameras.new('Camera_Pavilion'));link_object(cam,collection('Cameras'))
+        cam.location=Vector(pavilion.location)+Vector((1,-16,3));target=Vector(pavilion.location)+Vector((0,0,3.2))
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.lens=40;cam.data.clip_end=30000

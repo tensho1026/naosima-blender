@@ -86,7 +86,9 @@ def _low_poly_tree(name: str, mats: dict, rng: random.Random) -> bpy.types.Objec
     link_object(obj,collection('TreeAssets'))
     obj.data.materials.append(mats['Trunk']);obj.data.materials.append(mats['Foliage'])
     for p in mesh.polygons:p.use_smooth=p.material_index==1
-    obj.hide_render=True;obj.hide_viewport=True
+    # Disable the source object's drawing, not its dependency-graph geometry:
+    # hide_viewport also removes the GN collection instances from the viewport.
+    obj.hide_render=True;obj.hide_set(True)
     obj['status']='ESTIMATED broadleaf canopy'
     return obj
 
@@ -174,7 +176,7 @@ def _rock_proto(mats: dict) -> bpy.types.Object:
     obj = new_mesh_object("RockAsset", verts, faces, collection("TreeAssets"))
     assign_material(obj, mats["Rock"])
     obj.hide_render = True
-    obj.hide_viewport = True
+    obj.hide_set(True)
     return obj
 
 
