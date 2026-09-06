@@ -30,6 +30,19 @@ for x in range(-33,34,3):
 assert 'bldg_401738807' not in bpy.data.objects,'Underground museum extruded above ground'
 assert 'bldg_75615686' not in bpy.data.objects,'Duplicate terminal envelope'
 assert 'MarineStation_OSM_Roof' in bpy.data.objects
+station_roof=bpy.data.objects['MarineStation_OSM_Roof']
+roof_z=[v.co.z for v in station_roof.data.vertices]
+assert abs(max(roof_z)-min(roof_z)-.155)<.001,'Station roof thickness differs from reference'
+for obj in bpy.data.objects:
+    if obj.name.startswith('MarineStation_Column_'):
+        assert abs(obj.dimensions.x-.085)<.001 and abs(obj.dimensions.y-.085)<.001,'Station column too thick'
+    if obj.name.startswith('MarineStation_GlassRoom_') and obj.type=='EMPTY':
+        glass=[c for c in obj.children if c.type=='MESH' and c.name.endswith('_Glass')]
+        import bmesh
+        assert len(glass)==1
+        bm=bmesh.new();bm.from_mesh(glass[0].data);volume=abs(bm.calc_volume());bm.free()
+        extent=glass[0].dimensions
+        assert 0<volume/(extent.x*extent.y*extent.z)<.02,'Glazed enclosure incorrectly filled with solid glass'
 assert 'courtyard_18870551_0' in bpy.data.objects
 assert bpy.data.objects['bldg_1465161307']['above_ground_floors']==1
 assert 'road_57371777' not in bpy.data.objects,'Planned marine highway rendered'

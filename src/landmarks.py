@@ -196,23 +196,99 @@ def _mapped_station(way,crs,sampler,mats,col):
     import math
     ring=drop_closing([crs.to_xy(*p) for p in way.coords])
     x=sum(p[0] for p in ring)/len(ring);y=sum(p[1] for p in ring)/len(ring)
-    z=max(sampler.height_at_xy(*p) for p in ring)
-    v,f=extrude(ring,z+5.8,0.22)
-    roof=new_mesh_object('MarineStation_OSM_Roof',v,f,col);assign_material(roof,mats['Steel'])
+    # Coarse DEM contains a several-metre mound beneath the terminal roof.
+    # Estimate the quay level from the three lowest perimeter samples instead.
+    levels=sorted(sampler.height_at_xy(*p) for p in ring)
+    z=sum(levels[:3])/3
+    terrain=bpy.data.objects.get('Terrain')
+    if terrain:
+        xmin=min(p[0] for p in ring)-8;xmax=max(p[0] for p in ring)+8
+        ymin=min(p[1] for p in ring)-8;ymax=max(p[1] for p in ring)+8
+        targets=[(terrain,-.15)]+[(road,.02) for road in (bpy.data.collections['Roads'].objects if 'Roads' in bpy.data.collections else [])]
+        for mesh,offset in targets:
+            for vertex in mesh.data.vertices:
+                px,py=vertex.co.x,vertex.co.y
+                if not(xmin<px<xmax and ymin<py<ymax):continue
+                if point_in_ring(px,py,ring):weight=1.0
+                else:
+                    distance=1e9
+                    for a,b in zip(ring,ring[1:]+ring[:1]):
+                        ex,ey=b[0]-a[0],b[1]-a[1]
+                        t=max(0,min(1,((px-a[0])*ex+(py-a[1])*ey)/(ex*ex+ey*ey)))
+                        distance=min(distance,math.hypot(px-a[0]-t*ex,py-a[1]-t*ey))
+                    weight=max(0,1-distance/8)
+                vertex.co.z=vertex.co.z*(1-weight)+(z+offset)*weight
+            mesh.data.update()
+        terrain['marine_station_grading']='Estimated quay plane from lowest perimeter DEM samples; 8m transition; not surveyed'
+
+    from .individual_buildings import _material
+    from .mesh_batch import Parts
+    roof_height=4.6;roof_thickness=.155;grid=6.75
+    white=_material('MarineStation_painted_steel',(.72,.73,.70),.45)
+    glazing=_material('MarineStation_thin_clear_glass',(.94,.97,.96),.08)
+    shader=next(n for n in glazing.node_tree.nodes if n.type=='BSDF_PRINCIPLED')
+    shader.inputs['Transmission Weight'].default_value=1;shader.inputs['IOR'].default_value=1.46
+    v,f=extrude(ring,z+roof_height,roof_thickness)
+    roof=new_mesh_object('MarineStation_OSM_Roof',v,f,col);assign_material(roof,white)
     roof['source']='https://www.openstreetmap.org/way/75615686'
-    roof['status']='OSM roof footprint; 5.8m height and column/glass arrangement ESTIMATED'
-    dx,dy=longest_edge_dir(ring);nx,ny=-dy,dx
+    roof['status']='OSM roof footprint; 85mm columns / 6.75m span / 155mm roof from published architect site visit; 4.6m elevation and room positions inferred'
+    roof['detail_reference']='https://trim.gangukan.jp/2012/09/29/「建築探訪-62」-naoshima/'
+    roof['column_diameter_m']=.085;roof['column_grid_m']=grid;roof['roof_thickness_m']=roof_thickness
+    dx,dy=longest_edge_dir(ring)
+    if dy<0:dx,dy=-dx,-dy  # +u points NE, toward the public road on the diagram.
+    nx,ny=-dy,dx
     def xy(u,v):return x+u*dx+v*nx,y+u*dy+v*ny
-    for u in range(-36,37,9):
-        for v in range(-27,28,9):
-            px,py=xy(u,v)
+    us=[(px-x)*dx+(py-y)*dy for px,py in ring];vs=[(px-x)*nx+(py-y)*ny for px,py in ring]
+    nu=int((max(us)-min(us))/grid);nv=int((max(vs)-min(vs))/grid)
+    u0=(min(us)+max(us)-nu*grid)/2;v0=(min(vs)+max(vs)-nv*grid)/2
+    for i in range(nu+1):
+        for j in range(nv+1):
+            px,py=xy(u0+i*grid,v0+j*grid)
             if not point_in_ring(px,py,ring):continue
-            bpy.ops.mesh.primitive_cylinder_add(vertices=12,radius=.1,depth=5.8,location=(px,py,z+2.9))
-            ob=bpy.context.object;ob.name='MarineStation_Column_ESTIMATED';link_object(ob,col);assign_material(ob,mats['Steel'])
-    for i,(u,v,sx,sy) in enumerate(((-16,-8,12,8),(8,8,14,10),(18,-12,9,7))):
+            bpy.ops.mesh.primitive_cylinder_add(vertices=16,radius=.0425,depth=roof_height,location=(px,py,z+roof_height/2))
+            ob=bpy.context.object;ob.name='MarineStation_Column_ESTIMATED';link_object(ob,col);assign_material(ob,white)
+            ob['diameter_m']=.085;ob['grid_origin_status']='Inferred within OSM roof boundary'
+    uc=(min(us)+max(us))/2;vc=(min(vs)+max(vs))/2
+    from .plan_clipping import clear_station_roads
+    clear_station_roads((x,y),(dx,dy),[
+        (uc+u-sx/2,vc+v-sy/2,uc+u+sx/2,vc+v+sy/2)
+        for u,v,sx,sy in [(3.1,3.2,27.4,25.4),(24,-4.7,12,9.4),(29.3,18.5,8.4,10.2)]])
+    plan_source='https://naoshima.net/wp-content/uploads/2015/09/uminoeki.pdf'
+    # Diagram north arrow and public-road/ferry sides anchor orientation to the
+    # roof's NE/SW axis. Dimensions below are proportional readings, not a survey.
+    for i,(u,v,sx,sy) in enumerate(((uc+3.1,vc+3.2,27.4,25.4),)):
         px,py=xy(u,v)
-        # Local geometry rotates with the mapped roof rather than world axes.
-        ob=_box(f'MarineStation_Glass_{i}_ESTIMATED',0,0,0,sx,sy,4.2,col,mats['Glass'])
+        root=bpy.data.objects.new(f'MarineStation_GlassRoom_{i}_ESTIMATED',None);link_object(root,col)
+        root.location=(px,py,z);root.rotation_euler.z=math.atan2(dy,dx)
+        root['fidelity']='Main terminal enclosure aligned to official visitor diagram; dimensions estimated by roof scale'
+        root['plan_source']=plan_source;root['function']='Passenger terminal, waiting, cafe and visitor information'
+        parts=Parts();h=roof_height
+        for side in (-1,1):
+            parts.box('Glass',(side*sx/2,0,h/2),(.012,sy,h))
+            parts.box('Glass',(0,side*sy/2,h/2),(sx,.012,h))
+            for height in (.04,h-.04):
+                parts.box('Frame',(side*sx/2,0,height),(.04,sy,.04))
+                parts.box('Frame',(0,side*sy/2,height),(sx,.04,.04))
+        for xx in (-sx/2,sx/2):
+            for yy in (-sy/2,sy/2):parts.box('Frame',(xx,yy,h/2),(.045,.045,h))
+        # Four exterior door locations shown in the public facilities diagram.
+        for along,edge in ((-5.1,sy/2),(7.6,-sy/2),(-4.4,-sy/2)):
+            for xx in (along-1,along,along+1):parts.box('Frame',(xx,edge,1.25),(.035,.055,2.5))
+            parts.box('Frame',(along,edge,2.5),(2.05,.065,.06))
+        for yy in (4.6,5.6,6.6):parts.box('Frame',(sx/2,yy,1.25),(.055,.035,2.5))
+        parts.box('Frame',(sx/2,5.6,2.5),(.065,2.05,.06))
+        parts.finish('Walls',root,{'Glass':glazing,'Frame':white})
+    for label,u,v,sx,sy in [('Lavatory',uc+24,vc-4.7,12.0,9.4),('RestrictedService',uc+29.3,vc+18.5,8.4,10.2)]:
+        px,py=xy(u,v)
+        ob=_box(f'MarineStation_{label}_PLAN_ESTIMATED',0,0,0,sx,sy,roof_height,col,mats['Concrete'])
         ob.location=(px,py,z);ob.rotation_euler.z=math.atan2(dy,dx)
+        ob['plan_source']=plan_source;ob['fidelity']='Separate volume from visitor diagram; wall finish, openings and exact dimensions unverified'
+    mirror=_material('MarineStation_mirror_steel',(.73,.74,.73),.065)
+    shader=next(n for n in mirror.node_tree.nodes if n.type=='BSDF_PRINCIPLED');shader.inputs['Metallic'].default_value=1
+    for i,(u,v,length) in enumerate(((uc-14.0,vc+9.6,5.9),(uc-25.2,vc-2.8,7.8))):
+        px,py=xy(u,v)
+        ob=_box(f'MarineStation_MirrorPanel_{i}_PLAN_ESTIMATED',0,0,0,.10,length,roof_height,col,mirror)
+        ob.location=(px,py,z);ob.rotation_euler.z=math.atan2(dy,dx)
+        ob['plan_source']=plan_source;ob['fidelity']='Two freestanding panel positions read from visitor diagram; remaining structural panels not modelled'
     v,f=extrude(ring,z-.15,.15)
     ob=new_mesh_object('MarineStation_Paving',v,f,col);assign_material(ob,mats['Concrete'])
