@@ -93,6 +93,55 @@ def _low_poly_tree(name: str, mats: dict, rng: random.Random) -> bpy.types.Objec
     return obj
 
 
+def configure_forest_preview(points_obj, stride=8):
+    """Thin only interactive instances; retain original point IDs and render density."""
+    # Only three shared prototypes are simplified, never thousands of instances.
+    # Modifier render visibility preserves the authored crown in final images.
+    for tree in bpy.data.collections['TreePrototypes'].objects:
+        preview = tree.modifiers.get('ViewportCrownReduction')
+        if preview is None:
+            preview = tree.modifiers.new('ViewportCrownReduction', 'DECIMATE')
+        preview.decimate_type = 'COLLAPSE'
+        preview.ratio = .25
+        preview.show_viewport = True
+        preview.show_render = False
+    mod = next(m for m in points_obj.modifiers if m.type == 'NODES')
+    ng = mod.node_group
+    if ng.nodes.get('ForestPreviewSwitch'):
+        return
+    nodes, links = ng.nodes, ng.links
+    step = nodes.new('ShaderNodeValue')
+    step.name = 'ViewportTreeStride'
+    step.label = 'Viewport: show every Nth tree (1 = all)'
+    step.outputs[0].default_value = max(1, stride)
+    step.location = (-800, 600)
+    inst = next(n for n in nodes if n.bl_idname == 'GeometryNodeInstanceOnPoints')
+    index = nodes.new('GeometryNodeInputIndex')
+    index.location = (-800, 450)
+    modulo = nodes.new('ShaderNodeMath')
+    modulo.operation = 'MODULO'
+    modulo.location = (-600, 450)
+    links.new(index.outputs['Index'], modulo.inputs[0])
+    links.new(step.outputs[0], modulo.inputs[1])
+    keep = nodes.new('ShaderNodeMath')
+    keep.operation = 'LESS_THAN'
+    keep.inputs[1].default_value = .5
+    keep.location = (-400, 450)
+    links.new(modulo.outputs[0], keep.inputs[0])
+    viewport = nodes.new('GeometryNodeIsViewport')
+    viewport.location = (-400, 650)
+    switch = nodes.new('GeometryNodeSwitch')
+    switch.input_type = 'BOOLEAN'
+    switch.name = 'ForestPreviewSwitch'
+    switch.label = 'All trees in render / sparse trees in viewport'
+    switch.location = (-100, 450)
+    switch.inputs['False'].default_value = True
+    links.new(viewport.outputs['Is Viewport'], switch.inputs['Switch'])
+    links.new(keep.outputs[0], switch.inputs['True'])
+    links.new(switch.outputs[0], inst.inputs['Selection'])
+    points_obj['preview_note'] = 'Viewport shows every Nth tree; render retains every tree. Change ViewportTreeStride in ForestGN nodes; 1 shows all.'
+
+
 def _make_gn_instances(points_obj: bpy.types.Object, prototypes: List[bpy.types.Object], density_note: str):
     """Instance random prototypes on mesh vertices via Geometry Nodes (Blender 4.5)."""
     ng = bpy.data.node_groups.new("ForestInstances", "GeometryNodeTree")
@@ -161,6 +210,8 @@ def _make_gn_instances(points_obj: bpy.types.Object, prototypes: List[bpy.types.
     mod = points_obj.modifiers.new("ForestGN", "NODES")
     mod.node_group = ng
     points_obj['placement_source'] = density_note
+    if prototypes:
+        configure_forest_preview(points_obj)
 
 
 def _rock_proto(mats: dict) -> bpy.types.Object:
